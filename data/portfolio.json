@@ -1,5 +1,5 @@
 {
-  "asOf": "2026-09-03T19:52:13.514Z",
+  "asOf": "2026-09-03T20:21:09.799Z",
   "wallet": "0x85D62cDb64bAEcdFAC953889bC28A952815b950A",
   "sourceTransactionCount": 44,
   "ethUsd": 2391.52,
@@ -34,7 +34,9 @@
       "marketCapUsd": 8789950.28649046,
       "currentPriceUsd": 0.00879,
       "quoteProvider": "Matcha net quote",
-      "confidence": "Проверено вручную"
+      "confidence": "Проверено вручную",
+      "totalSupply": 1000000000,
+      "mcapSupply": 999994344.3106327
     },
     {
       "name": "Index",
@@ -56,7 +58,9 @@
       "marketCapUsd": 38737023.53192386,
       "currentPriceUsd": 0.03950616,
       "quoteProvider": null,
-      "confidence": "Нет котировки Matcha"
+      "confidence": "Нет котировки Matcha",
+      "totalSupply": 1000000000,
+      "mcapSupply": 980531226.8244715
     },
     {
       "name": "Trade Pools",
@@ -78,7 +82,9 @@
       "marketCapUsd": 1710806.8183611776,
       "currentPriceUsd": 0.00171082,
       "quoteProvider": null,
-      "confidence": "Нет котировки Matcha"
+      "confidence": "Нет котировки Matcha",
+      "totalSupply": 1000000000,
+      "mcapSupply": 999992295.1340162
     },
     {
       "name": "Trade Pools",
@@ -100,7 +106,9 @@
       "marketCapUsd": 17562.427323508513,
       "currentPriceUsd": 0.00001756,
       "quoteProvider": null,
-      "confidence": "Нет котировки Matcha"
+      "confidence": "Нет котировки Matcha",
+      "totalSupply": 1000000000,
+      "mcapSupply": 1000138230.2681385
     },
     {
       "name": "ZED",
@@ -122,7 +130,9 @@
       "marketCapUsd": 90394.1414276949,
       "currentPriceUsd": 0.00009086,
       "quoteProvider": null,
-      "confidence": "Нет котировки Matcha"
+      "confidence": "Нет котировки Matcha",
+      "totalSupply": 1000000000,
+      "mcapSupply": 994872787.0096292
     },
     {
       "name": "GTR",
@@ -144,7 +154,9 @@
       "marketCapUsd": 636950.8994049601,
       "currentPriceUsd": 0.00063695,
       "quoteProvider": null,
-      "confidence": "Нет котировки Matcha"
+      "confidence": "Нет котировки Matcha",
+      "totalSupply": 1000000000,
+      "mcapSupply": 1000001412.0495489
     },
     {
       "name": "Robinhood",
@@ -166,7 +178,9 @@
       "marketCapUsd": 82827.66964472905,
       "currentPriceUsd": 0.00008284,
       "quoteProvider": null,
-      "confidence": "Нет котировки Matcha"
+      "confidence": "Нет котировки Matcha",
+      "totalSupply": 1000000000,
+      "mcapSupply": 999851154.5718137
     },
     {
       "name": "Bowyer",
@@ -188,7 +202,9 @@
       "marketCapUsd": 84711.45220324119,
       "currentPriceUsd": 0.00008471,
       "quoteProvider": null,
-      "confidence": "Продажа учтена · нет котировки Matcha"
+      "confidence": "Продажа учтена · нет котировки Matcha",
+      "totalSupply": 999999977.3847371,
+      "mcapSupply": 1000017143.2326903
     },
     {
       "name": "HOODIE",
@@ -210,7 +226,9 @@
       "marketCapUsd": 138834.12566356282,
       "currentPriceUsd": 0.00000139,
       "quoteProvider": null,
-      "confidence": "Нет котировки Matcha"
+      "confidence": "Нет котировки Matcha",
+      "totalSupply": 99999999999,
+      "mcapSupply": 99880665945.00922
     },
     {
       "name": "Ranger",
@@ -232,7 +250,9 @@
       "marketCapUsd": 17503.664524557058,
       "currentPriceUsd": 0.00001751,
       "quoteProvider": null,
-      "confidence": "Нет котировки Matcha"
+      "confidence": "Нет котировки Matcha",
+      "totalSupply": 1000000000,
+      "mcapSupply": 999638179.586354
     },
     {
       "name": "Unicorn",
@@ -254,7 +274,9 @@
       "marketCapUsd": null,
       "currentPriceUsd": null,
       "quoteProvider": null,
-      "confidence": "Нет котировки"
+      "confidence": "Нет котировки",
+      "totalSupply": 1000000000,
+      "mcapSupply": 1000000000
     },
     {
       "name": "Dishwasher",
@@ -276,7 +298,9 @@
       "marketCapUsd": null,
       "currentPriceUsd": null,
       "quoteProvider": null,
-      "confidence": "Нет котировки"
+      "confidence": "Нет котировки",
+      "totalSupply": 99999999999.99998,
+      "mcapSupply": 99999999999.99998
     },
     {
       "name": "PEA",
@@ -298,7 +322,9 @@
       "marketCapUsd": null,
       "currentPriceUsd": null,
       "quoteProvider": null,
-      "confidence": "Нет котировки"
+      "confidence": "Нет котировки",
+      "totalSupply": 26532.71173348346,
+      "mcapSupply": 26532.71173348346
     },
     {
       "name": "PFWA",
@@ -320,7 +346,9 @@
       "marketCapUsd": null,
       "currentPriceUsd": null,
       "quoteProvider": null,
-      "confidence": "Нет котировки"
+      "confidence": "Нет котировки",
+      "totalSupply": 1000000000,
+      "mcapSupply": 1000000000
     },
     {
       "name": "GG",
@@ -342,7 +370,9 @@
       "marketCapUsd": null,
       "currentPriceUsd": null,
       "quoteProvider": null,
-      "confidence": "Нет котировки"
+      "confidence": "Нет котировки",
+      "totalSupply": 1000000000,
+      "mcapSupply": 1000000000
     },
     {
       "name": "AP",
@@ -364,7 +394,9 @@
       "marketCapUsd": null,
       "currentPriceUsd": null,
       "quoteProvider": null,
-      "confidence": "Нет котировки"
+      "confidence": "Нет котировки",
+      "totalSupply": 1000000000,
+      "mcapSupply": 1000000000
     },
     {
       "name": "ARCADS",
@@ -386,7 +418,9 @@
       "marketCapUsd": null,
       "currentPriceUsd": null,
       "quoteProvider": null,
-      "confidence": "Нет котировки"
+      "confidence": "Нет котировки",
+      "totalSupply": 990000000,
+      "mcapSupply": 990000000
     },
     {
       "name": "OOF",
@@ -408,7 +442,9 @@
       "marketCapUsd": null,
       "currentPriceUsd": null,
       "quoteProvider": null,
-      "confidence": "Нет котировки"
+      "confidence": "Нет котировки",
+      "totalSupply": 1000000000,
+      "mcapSupply": 1000000000
     },
     {
       "name": "Saylor Moon",
@@ -430,7 +466,9 @@
       "marketCapUsd": null,
       "currentPriceUsd": null,
       "quoteProvider": null,
-      "confidence": "Нет котировки"
+      "confidence": "Нет котировки",
+      "totalSupply": 1000000000,
+      "mcapSupply": 1000000000
     },
     {
       "name": "Clippy",
@@ -452,7 +490,9 @@
       "marketCapUsd": null,
       "currentPriceUsd": null,
       "quoteProvider": null,
-      "confidence": "Нет котировки"
+      "confidence": "Нет котировки",
+      "totalSupply": 1000000000,
+      "mcapSupply": 1000000000
     },
     {
       "name": "Qubit",
@@ -474,7 +514,9 @@
       "marketCapUsd": null,
       "currentPriceUsd": null,
       "quoteProvider": null,
-      "confidence": "Нет котировки"
+      "confidence": "Нет котировки",
+      "totalSupply": 1000000000,
+      "mcapSupply": 1000000000
     },
     {
       "name": "CUCK",
@@ -496,7 +538,9 @@
       "marketCapUsd": null,
       "currentPriceUsd": null,
       "quoteProvider": null,
-      "confidence": "Нет котировки"
+      "confidence": "Нет котировки",
+      "totalSupply": 1000000000,
+      "mcapSupply": 1000000000
     },
     {
       "name": "Jinqian",
@@ -518,7 +562,9 @@
       "marketCapUsd": null,
       "currentPriceUsd": null,
       "quoteProvider": null,
-      "confidence": "Нет котировки"
+      "confidence": "Нет котировки",
+      "totalSupply": 1000000000,
+      "mcapSupply": 1000000000
     },
     {
       "name": "ALI",
@@ -540,7 +586,9 @@
       "marketCapUsd": null,
       "currentPriceUsd": null,
       "quoteProvider": null,
-      "confidence": "Нет котировки"
+      "confidence": "Нет котировки",
+      "totalSupply": 1000000000,
+      "mcapSupply": 1000000000
     },
     {
       "name": "NAV",
@@ -562,7 +610,9 @@
       "marketCapUsd": null,
       "currentPriceUsd": null,
       "quoteProvider": null,
-      "confidence": "Нет котировки"
+      "confidence": "Нет котировки",
+      "totalSupply": 955428423.6328311,
+      "mcapSupply": 955428423.6328311
     }
   ],
   "sources": {

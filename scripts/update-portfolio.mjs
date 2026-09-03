@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 
 const DATA_PATH = new URL('../data/portfolio.json', import.meta.url);
 const BLOCKSCOUT = 'https://robinhoodchain.blockscout.com/api/v2';
+const ROBINHOOD_RPC = 'https://rpc.mainnet.chain.robinhood.com';
 const WETH = '0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73';
 const CHAIN_ID = '4663';
 
@@ -45,6 +46,27 @@ async function updateMarketData(position) {
   position.holders = Number(token.holders_count ?? 0);
 }
 
+async function updateSupply(position) {
+  const calls = [
+    { jsonrpc: '2.0', id: 1, method: 'eth_call', params: [{ to: position.contract, data: '0x18160ddd' }, 'latest'] },
+    { jsonrpc: '2.0', id: 2, method: 'eth_call', params: [{ to: position.contract, data: '0x313ce567' }, 'latest'] },
+  ];
+  const response = await getJson(ROBINHOOD_RPC, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(calls),
+  });
+  const supplyHex = response.find((item) => item.id === 1)?.result;
+  const decimalsHex = response.find((item) => item.id === 2)?.result;
+  if (!supplyHex || !decimalsHex) throw new Error('totalSupply/decimals не возвращены RPC');
+
+  const decimals = Number(BigInt(decimalsHex));
+  position.totalSupply = Number(BigInt(supplyHex)) / 10 ** decimals;
+  position.mcapSupply = position.marketCapUsd && position.currentPriceUsd
+    ? position.marketCapUsd / position.currentPriceUsd
+    : position.totalSupply;
+}
+
 async function updateExecutableQuote(position) {
   const apiKey = process.env.ZEROX_API_KEY;
   if (!apiKey) return false;
@@ -84,6 +106,11 @@ for (const position of portfolio.positions) {
     await updateMarketData(position);
   } catch (error) {
     console.warn(`MCap ${position.symbol} не обновлён: ${error.message}`);
+  }
+  try {
+    await updateSupply(position);
+  } catch (error) {
+    console.warn(`Supply ${position.symbol} не обновлён: ${error.message}`);
   }
   try {
     await updateExecutableQuote(position);
