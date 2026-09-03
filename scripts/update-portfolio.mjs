@@ -136,10 +136,12 @@ async function fetch0xQuote(position, endpoint) {
     sellToken: position.contract,
     buyToken: WETH,
     sellAmount: position.balanceRaw,
-    taker: portfolio.wallet,
     slippageBps: '100',
-    sellEntireBalance: 'true',
   });
+  if (endpoint.endsWith('/quote')) {
+    query.set('taker', portfolio.wallet);
+    query.set('sellEntireBalance', 'true');
+  }
   const quote = await getJson(`https://api.0x.org/swap/${endpoint}?${query}`, {
     headers: { '0x-api-key': apiKey, '0x-version': 'v2' },
   });
