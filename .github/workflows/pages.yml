@@ -8,7 +8,7 @@ on:
     - cron: '13,28,43,58 * * * *'
 
 permissions:
-  contents: write
+  contents: read
   pages: write
   id-token: write
 
@@ -33,14 +33,6 @@ jobs:
         run: pnpm update:data
         env:
           ZEROX_API_KEY: ${{ secrets.ZEROX_API_KEY }}
-      - name: Save refreshed snapshot
-        if: github.event_name != 'push'
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/portfolio.json
-          git diff --cached --quiet || git commit -m "chore: refresh portfolio snapshot"
-          git push
       - run: pnpm build
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v4
