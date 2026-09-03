@@ -28,11 +28,23 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
+      - name: Restore last successful portfolio quotes
+        uses: actions/cache/restore@v4
+        with:
+          path: data/portfolio-cache.json
+          key: ${{ runner.os }}-portfolio-${{ github.run_id }}
+          restore-keys: |
+            ${{ runner.os }}-portfolio-
       - run: pnpm install --frozen-lockfile
       - name: Update market data
         run: pnpm update:data
         env:
           ZEROX_API_KEY: ${{ secrets.ZEROX_API_KEY }}
+      - name: Save successful portfolio quotes
+        uses: actions/cache/save@v4
+        with:
+          path: data/portfolio-cache.json
+          key: ${{ runner.os }}-portfolio-${{ github.run_id }}
       - run: pnpm build
       - name: Normalize GitHub Pages asset paths
         run: |

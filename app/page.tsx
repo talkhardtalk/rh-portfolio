@@ -32,8 +32,8 @@ type Position = {
 type Portfolio = Omit<typeof portfolioJson, 'positions'> & { positions: Position[] };
 const portfolio = portfolioJson as Portfolio;
 
-const number = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 4 });
-const eth = new Intl.NumberFormat('ru-RU', { minimumFractionDigits: 4, maximumFractionDigits: 6 });
+const number = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 2 });
+const eth = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 2 });
 const usd = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', notation: 'compact', maximumFractionDigits: 2 });
 
 export const dynamic = 'force-static';
@@ -43,7 +43,9 @@ function shortAddress(address: string) {
 }
 
 function displayEth(value: number | null) {
-  return value === null ? '—' : eth.format(value);
+  if (value === null) return '—';
+  if (value !== 0 && Math.abs(value) < 0.01) return `${value < 0 ? '−' : ''}<0,01`;
+  return eth.format(value);
 }
 
 function displayMcapUsd(value: number | null) {
@@ -117,9 +119,9 @@ export default function Home() {
           </div>
 
           <div className="metrics-grid">
-            <Metric label="Затрачено" value={`${eth.format(portfolio.summary.costEth)} ETH`} detail={`все ${portfolio.summary.positionsCount} позиций`} />
-            <Metric label="Текущая оценка" value={`${eth.format(portfolio.summary.valueEth)} ETH`} detail={`${portfolio.summary.valuedPositionsCount} из ${portfolio.summary.positionsCount} оценено`} />
-            <Metric label="PnL оценённых" value={`${pnlPositive ? '+' : ''}${eth.format(portfolio.summary.pnlEth)} ETH`} detail={`${pnlPositive ? '+' : ''}${number.format(portfolio.summary.pnlPct)}% · с учётом продаж`} positive={pnlPositive} />
+            <Metric label="Затрачено" value={`${displayEth(portfolio.summary.costEth)} ETH`} detail={`все ${portfolio.summary.positionsCount} позиций`} />
+            <Metric label="Текущая оценка" value={`${displayEth(portfolio.summary.valueEth)} ETH`} detail={`${portfolio.summary.valuedPositionsCount} из ${portfolio.summary.positionsCount} оценено`} />
+            <Metric label="PnL оценённых" value={`${pnlPositive ? '+' : ''}${displayEth(portfolio.summary.pnlEth)} ETH`} detail={`${pnlPositive ? '+' : ''}${number.format(portfolio.summary.pnlPct)}% · с учётом продаж`} positive={pnlPositive} />
             <Metric label="Позиций" value={String(portfolio.summary.positionsCount)} detail={`${portfolio.sourceTransactionCount} txs · без спама`} />
           </div>
         </section>
@@ -164,7 +166,7 @@ export default function Home() {
                       </TableCell>
                       <TableCell className="date-cell">{position.purchaseDateLabel}</TableCell>
                       <TableCell className="text-right tabular-nums">{number.format(position.bought)}</TableCell>
-                      <TableCell className="text-right tabular-nums">{eth.format(position.spentEth)}</TableCell>
+                      <TableCell className="text-right tabular-nums">{displayEth(position.spentEth)}</TableCell>
                       <TableCell className="text-right tabular-nums mcap-entry">{displayMcapUsd(buyMcapUsd)}</TableCell>
                       <TableCell className="text-right tabular-nums">{number.format(position.sold)}</TableCell>
                       <TableCell className="text-right tabular-nums mcap-exit">{displayMcapUsd(sellMcapUsd)}</TableCell>
@@ -172,7 +174,7 @@ export default function Home() {
                       <TableCell className="text-right tabular-nums value-cell">{displayEth(position.currentValueEth)}</TableCell>
                       <TableCell className={`text-right tabular-nums ${hasPnl ? (position.pnlEth! >= 0 ? 'positive' : 'negative') : 'muted-cell'}`}>
                         {hasPnl ? (
-                          <><span className="pnl-line">{position.pnlEth! >= 0 ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}{position.pnlEth! >= 0 ? '+' : ''}{eth.format(position.pnlEth!)}</span><small>{position.pnlPct! >= 0 ? '+' : ''}{number.format(position.pnlPct!)}%</small></>
+                          <><span className="pnl-line">{position.pnlEth! >= 0 ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}{position.pnlEth! >= 0 ? '+' : ''}{displayEth(position.pnlEth!)}</span><small>{position.pnlPct! >= 0 ? '+' : ''}{number.format(position.pnlPct!)}%</small></>
                         ) : '—'}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">{position.marketCapUsd === null ? '—' : usd.format(position.marketCapUsd)}</TableCell>
@@ -186,7 +188,7 @@ export default function Home() {
 
         <section className="audit-card">
           <div><p className="section-kicker">Методика</p><h3>Как считается PnL</h3></div>
-          <p>Выручка от продаж плюс оценка остатка минус полная себестоимость. MCap покупки и продажи рассчитан в USD по средней цене сделки, total supply и дневному курсу ETH/USD. Пустые котировки не считаются нулём.</p>
+          <p>Выручка от продаж плюс исполнимая оценка остатка через 0x минус полная себестоимость. Текущий MCap берётся с DexScreener по наиболее ликвидной паре с ETH/WETH/USDG; исторический MCap рассчитан по средней цене сделки, supply и дневному ETH/USD. Пустые котировки не считаются нулём.</p>
           <div className="audit-status"><span className="status-mark">✓</span><div><strong>Продажи и связанные адреса учтены</strong><small>FRONG: 4 покупки · BOWYER: частичная продажа</small></div></div>
         </section>
 
@@ -194,6 +196,7 @@ export default function Home() {
           <span>Данные носят аналитический характер.</span>
           <a href={portfolio.sources.blockscout} target="_blank" rel="noreferrer">Blockscout</a>
           <a href={portfolio.sources.matcha} target="_blank" rel="noreferrer">Matcha</a>
+          <a href="https://dexscreener.com/robinhood" target="_blank" rel="noreferrer">DexScreener</a>
           <a href="https://www.binance.com/en/price/ethereum" target="_blank" rel="noreferrer">ETH/USD</a>
         </footer>
       </section>
