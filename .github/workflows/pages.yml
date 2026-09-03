@@ -34,6 +34,11 @@ jobs:
         env:
           ZEROX_API_KEY: ${{ secrets.ZEROX_API_KEY }}
       - run: pnpm build
+      - name: Normalize GitHub Pages asset paths
+        run: |
+          repo_name="${GITHUB_REPOSITORY#*/}"
+          mv "dist/client/${repo_name}/_next" dist/client/_next
+          rmdir "dist/client/${repo_name}"
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v4
         with:
