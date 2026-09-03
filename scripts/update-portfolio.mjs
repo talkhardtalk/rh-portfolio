@@ -113,4 +113,7 @@ portfolio.summary = {
 portfolio.asOf = new Date().toISOString();
 
 await fs.writeFile(DATA_PATH, `${JSON.stringify(portfolio, null, 2)}\n`);
-console.log(`Обновлено: ${portfolio.positions.length} позиций, ${portfolio.sourceTransactionCount} транзакций.`);
+console.log(
+  `Обновлено: ${portfolio.positions.length} позиций, ${portfolio.sourceTransactionCount} транзакций, ` +
+  `${valuedPositions.length} исполнимых котировок.`,
+);
