@@ -1,0 +1,37 @@
+{
+  "asOf": "2026-09-03T08:25:13.811Z",
+  "wallet": "0x85D62cDb64bAEcdFAC953889bC28A952815b950A",
+  "sourceTransactionCount": 44,
+  "summary": {
+    "costEth": 1.9717751057737019,
+    "valueEth": 4.08217,
+    "pnlEth": 2.110394894226298,
+    "pnlPct": 107.03020278766544,
+    "positionsCount": 1
+  },
+  "positions": [
+    {
+      "name": "frong",
+      "symbol": "FRONG",
+      "contract": "0x6245e67affA44a23077f0Ea7f981a8DC743a0c47",
+      "bought": 1223578.3351708914,
+      "spentEth": 1.9717751057737019,
+      "avgBuyEth": 0.00000161148252555347,
+      "sold": 0,
+      "avgSellEth": null,
+      "balance": 1223578.3351708914,
+      "balanceRaw": "1223578335170891469376457",
+      "currentValueEth": 4.08217,
+      "pnlEth": 2.110394894226298,
+      "pnlPct": 107.03020278766544,
+      "marketCapUsd": 8789950.28649046,
+      "currentPriceUsd": 0.00879,
+      "confidence": "Проверено",
+      "matchaUrl": "https://matcha.xyz/tokens/robinhood/0x6245e67affA44a23077f0Ea7f981a8DC743a0c47?buyAddress=0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73&buyChain=4663&sellAddress=0x6245e67affA44a23077f0Ea7f981a8DC743a0c47&sellChain=4663&sellAmount=1223578.335170891469376457"
+    }
+  ],
+  "sources": {
+    "blockscout": "https://robinhoodchain.blockscout.com/address/0x85D62cDb64bAEcdFAC953889bC28A952815b950A?tab=txs",
+    "matcha": "https://matcha.xyz/tokens/robinhood/0x6245e67affA44a23077f0Ea7f981a8DC743a0c47"
+  }
+}
