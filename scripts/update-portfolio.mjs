@@ -35,8 +35,8 @@ async function countTransactions(address) {
 
 async function updateMarketData(position) {
   const token = await getJson(`${BLOCKSCOUT}/tokens/${position.contract}`);
-  if (token.circulating_market_cap) position.marketCapUsd = Number(token.circulating_market_cap);
-  if (token.exchange_rate) position.currentPriceUsd = Number(token.exchange_rate);
+  position.marketCapUsd = token.circulating_market_cap ? Number(token.circulating_market_cap) : null;
+  position.currentPriceUsd = token.exchange_rate ? Number(token.exchange_rate) : null;
   position.holders = Number(token.holders_count ?? 0);
 }
 
@@ -67,6 +67,13 @@ try {
   console.warn(`Список транзакций временно недоступен, сохранено последнее значение: ${error.message}`);
 }
 
+try {
+  const weth = await getJson(`${BLOCKSCOUT}/tokens/${WETH}`);
+  if (weth.exchange_rate) portfolio.ethUsd = Number(weth.exchange_rate);
+} catch (error) {
+  console.warn(`Цена ETH временно недоступна, сохранено последнее значение: ${error.message}`);
+}
+
 for (const position of portfolio.positions) {
   try {
     await updateMarketData(position);
@@ -79,22 +86,30 @@ for (const position of portfolio.positions) {
     console.warn(`Котировка ${position.symbol} не обновлена: ${error.message}`);
   }
 
-  const realizedProceedsEth = position.realizedProceedsEth ?? position.sold * (position.avgSellEth ?? 0);
-  position.pnlEth = realizedProceedsEth + position.currentValueEth - position.spentEth;
-  position.pnlPct = position.spentEth ? position.pnlEth / position.spentEth * 100 : 0;
+  const realizedProceedsEth = position.realizedProceedsEth ?? 0;
+  if (typeof position.currentValueEth === 'number') {
+    position.pnlEth = realizedProceedsEth + position.currentValueEth - position.spentEth;
+    position.pnlPct = position.spentEth ? position.pnlEth / position.spentEth * 100 : 0;
+  } else {
+    position.pnlEth = null;
+    position.pnlPct = null;
+  }
 }
 
-portfolio.positions.sort((a, b) => b.currentValueEth - a.currentValueEth);
+portfolio.positions.sort((a, b) => (b.currentValueEth ?? -1) - (a.currentValueEth ?? -1));
+const valuedPositions = portfolio.positions.filter((item) => typeof item.currentValueEth === 'number');
+const valuedCostEth = valuedPositions.reduce((sum, item) => sum + item.spentEth, 0);
+const pnlEth = valuedPositions.reduce((sum, item) => sum + item.pnlEth, 0);
 portfolio.summary = {
   costEth: portfolio.positions.reduce((sum, item) => sum + item.spentEth, 0),
-  valueEth: portfolio.positions.reduce((sum, item) => sum + item.currentValueEth, 0),
-  pnlEth: portfolio.positions.reduce((sum, item) => sum + item.pnlEth, 0),
-  pnlPct: 0,
+  valueEth: valuedPositions.reduce((sum, item) => sum + item.currentValueEth, 0),
+  pnlEth,
+  pnlPct: valuedCostEth ? pnlEth / valuedCostEth * 100 : 0,
   positionsCount: portfolio.positions.length,
+  valuedPositionsCount: valuedPositions.length,
+  valuedCostEth,
+  realizedProceedsEth: valuedPositions.reduce((sum, item) => sum + (item.realizedProceedsEth ?? 0), 0),
 };
-portfolio.summary.pnlPct = portfolio.summary.costEth
-  ? portfolio.summary.pnlEth / portfolio.summary.costEth * 100
-  : 0;
 portfolio.asOf = new Date().toISOString();
 
 await fs.writeFile(DATA_PATH, `${JSON.stringify(portfolio, null, 2)}\n`);

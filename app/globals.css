@@ -66,7 +66,7 @@ a { color: inherit; text-decoration: none; }
 .table-heading h3,.audit-card h3 { margin: 0; font-size: 1rem; }
 .table-heading p { color: #7f9088; margin: 4px 0 0; font-size: .75rem; }
 .table-scroll { overflow-x: auto; }
-table { min-width: 1160px; }
+table { min-width: 1420px; }
 thead { background: rgba(255,255,255,.015); }
 th { color: #7f9188 !important; font-size: .7rem; font-weight: 580 !important; white-space: nowrap; height: 46px !important; }
 td { border-color: rgba(188,222,204,.08) !important; font-size: .79rem; height: 76px; white-space: nowrap; }
@@ -76,6 +76,9 @@ td { border-color: rgba(188,222,204,.08) !important; font-size: .79rem; height: 
 .token-cell small { color: #6f8178; display: block; margin-top: 3px; font-family: var(--font-geist-mono); font-size: .65rem; }
 .value-cell { font-weight: 760; color: #eaf4ef; }
 .tiny-number { font-family: var(--font-geist-mono); font-size: .7rem; color: #aab8b1; }
+.date-cell { color: #cad5d0; }
+.date-cell small { color: #6f8178; }
+.muted-cell { color: #66766e; }
 .pnl-line { display: flex; align-items: center; justify-content: flex-end; gap: 2px; font-weight: 750; }
 td small { display: block; font-size: .65rem; margin-top: 3px; opacity: .7; }
 .audit-card { border-radius: 18px; margin-top: 14px; padding: 22px; display: grid; grid-template-columns: .85fr 1.35fr 1.1fr; align-items: center; gap: 28px; }
