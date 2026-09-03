@@ -37,6 +37,11 @@ async function updateMarketData(position) {
   const token = await getJson(`${BLOCKSCOUT}/tokens/${position.contract}`);
   position.marketCapUsd = token.circulating_market_cap ? Number(token.circulating_market_cap) : null;
   position.currentPriceUsd = token.exchange_rate ? Number(token.exchange_rate) : null;
+  const decimals = Number(token.decimals ?? 18);
+  position.totalSupply = token.total_supply ? Number(token.total_supply) / 10 ** decimals : null;
+  position.mcapSupply = position.marketCapUsd && position.currentPriceUsd
+    ? position.marketCapUsd / position.currentPriceUsd
+    : position.totalSupply;
   position.holders = Number(token.holders_count ?? 0);
 }
 

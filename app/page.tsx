@@ -21,6 +21,10 @@ type Position = {
   pnlPct: number | null;
   marketCapUsd: number | null;
   currentPriceUsd: number | null;
+  totalSupply?: number | null;
+  mcapSupply?: number | null;
+  entryEthUsd: number;
+  exitEthUsd: number | null;
   quoteProvider: string | null;
   confidence: string;
 };
@@ -38,12 +42,12 @@ function shortAddress(address: string) {
   return `${address.slice(0, 6)}…${address.slice(-4)}`;
 }
 
-function compactEth(value: number | null) {
-  return value === null ? '—' : value.toExponential(4);
-}
-
 function displayEth(value: number | null) {
   return value === null ? '—' : eth.format(value);
+}
+
+function displayMcapUsd(value: number | null) {
+  return value === null || !Number.isFinite(value) ? '—' : usd.format(value);
 }
 
 function matchaUrl(position: Position) {
@@ -103,22 +107,24 @@ export default function Home() {
       </header>
 
       <section className="dashboard-shell">
-        <div className="intro-row">
-          <div>
-            <p className="section-kicker">Портфель</p>
-            <h2>Позиции, подтверждённые транзакциями</h2>
+        <section className="overview-section">
+          <div className="intro-row">
+            <div>
+              <p className="section-kicker">Обзор портфеля</p>
+              <h2>Robinhood Chain positions</h2>
+            </div>
+            <div className="freshness"><span className="live-dot" />Обновлено {updated} МСК</div>
           </div>
-          <div className="freshness"><span className="live-dot" />Обновлено {updated} МСК</div>
-        </div>
 
-        <div className="metrics-grid">
-          <Metric label="Затрачено" value={`${eth.format(portfolio.summary.costEth)} ETH`} detail={`все ${portfolio.summary.positionsCount} позиций`} />
-          <Metric label="Текущая оценка" value={`${eth.format(portfolio.summary.valueEth)} ETH`} detail={`${portfolio.summary.valuedPositionsCount} из ${portfolio.summary.positionsCount} оценено`} />
-          <Metric label="PnL оценённых" value={`${pnlPositive ? '+' : ''}${eth.format(portfolio.summary.pnlEth)} ETH`} detail={`${pnlPositive ? '+' : ''}${number.format(portfolio.summary.pnlPct)}% · с учётом продаж`} positive={pnlPositive} />
-          <Metric label="Позиций" value={String(portfolio.summary.positionsCount)} detail={`${portfolio.sourceTransactionCount} txs · без спам-трансферов`} />
-        </div>
+          <div className="metrics-grid">
+            <Metric label="Затрачено" value={`${eth.format(portfolio.summary.costEth)} ETH`} detail={`все ${portfolio.summary.positionsCount} позиций`} />
+            <Metric label="Текущая оценка" value={`${eth.format(portfolio.summary.valueEth)} ETH`} detail={`${portfolio.summary.valuedPositionsCount} из ${portfolio.summary.positionsCount} оценено`} />
+            <Metric label="PnL оценённых" value={`${pnlPositive ? '+' : ''}${eth.format(portfolio.summary.pnlEth)} ETH`} detail={`${pnlPositive ? '+' : ''}${number.format(portfolio.summary.pnlPct)}% · с учётом продаж`} positive={pnlPositive} />
+            <Metric label="Позиций" value={String(portfolio.summary.positionsCount)} detail={`${portfolio.sourceTransactionCount} txs · без спама`} />
+          </div>
+        </section>
 
-        <div className="table-card">
+        <section className="table-card">
           <div className="table-heading">
             <div><h3>Текущие позиции</h3><p>Сначала — позиции с наибольшей доступной оценкой в ETH</p></div>
             <Badge variant="outline">Источник покупок: вкладка txs ({portfolio.sourceTransactionCount})</Badge>
@@ -131,9 +137,9 @@ export default function Home() {
                   <TableHead>Дата покупки</TableHead>
                   <TableHead className="text-right">Куплено</TableHead>
                   <TableHead className="text-right">Затрачено, ETH</TableHead>
-                  <TableHead className="text-right">Ср. покупка</TableHead>
+                  <TableHead className="text-right" title="Расчётная капитализация в USD на средней цене покупки">MCap покупки</TableHead>
                   <TableHead className="text-right">Продано</TableHead>
-                  <TableHead className="text-right">Ср. продажа</TableHead>
+                  <TableHead className="text-right" title="Расчётная капитализация в USD на средней цене продажи">MCap продажи</TableHead>
                   <TableHead className="text-right">Остаток</TableHead>
                   <TableHead className="text-right">Сейчас, ETH</TableHead>
                   <TableHead className="text-right">PnL, ETH</TableHead>
@@ -144,24 +150,24 @@ export default function Home() {
                 {positions.map((position) => {
                   const avgBuyEth = position.spentEth / position.bought;
                   const avgSellEth = position.sold ? position.realizedProceedsEth / position.sold : null;
+                  const buyMcapUsd = position.mcapSupply ? avgBuyEth * position.entryEthUsd * position.mcapSupply : null;
+                  const sellMcapUsd = position.mcapSupply && avgSellEth && position.exitEthUsd
+                    ? avgSellEth * position.exitEthUsd * position.mcapSupply
+                    : null;
                   const hasPnl = position.pnlEth !== null && position.pnlPct !== null;
                   return (
                     <TableRow key={position.contract}>
                       <TableCell>
                         <div className="token-cell">
-                          <span className="token-icon">{position.symbol.slice(0, 1)}</span>
-                          <div>
-                            <a href={matchaUrl(position)} target="_blank" rel="noreferrer">{position.symbol} <ExternalLink size={12} /></a>
-                            <small>{shortAddress(position.contract)} · {position.quoteProvider ?? position.confidence}</small>
-                          </div>
+                          <a href={matchaUrl(position)} target="_blank" rel="noreferrer" title={`Открыть ${position.symbol} на Matcha`}>{position.symbol}</a>
                         </div>
                       </TableCell>
-                      <TableCell className="date-cell">{position.purchaseDateLabel}<small>{position.purchaseCount} {position.purchaseCount === 1 ? 'покупка' : 'покупки'}</small></TableCell>
+                      <TableCell className="date-cell">{position.purchaseDateLabel}</TableCell>
                       <TableCell className="text-right tabular-nums">{number.format(position.bought)}</TableCell>
                       <TableCell className="text-right tabular-nums">{eth.format(position.spentEth)}</TableCell>
-                      <TableCell className="text-right tabular-nums tiny-number">{compactEth(avgBuyEth)}</TableCell>
+                      <TableCell className="text-right tabular-nums mcap-entry">{displayMcapUsd(buyMcapUsd)}</TableCell>
                       <TableCell className="text-right tabular-nums">{number.format(position.sold)}</TableCell>
-                      <TableCell className="text-right tabular-nums tiny-number">{compactEth(avgSellEth)}</TableCell>
+                      <TableCell className="text-right tabular-nums mcap-exit">{displayMcapUsd(sellMcapUsd)}</TableCell>
                       <TableCell className="text-right tabular-nums">{number.format(position.balance)}</TableCell>
                       <TableCell className="text-right tabular-nums value-cell">{displayEth(position.currentValueEth)}</TableCell>
                       <TableCell className={`text-right tabular-nums ${hasPnl ? (position.pnlEth! >= 0 ? 'positive' : 'negative') : 'muted-cell'}`}>
@@ -176,11 +182,11 @@ export default function Home() {
               </TableBody>
             </Table>
           </div>
-        </div>
+        </section>
 
         <section className="audit-card">
           <div><p className="section-kicker">Методика</p><h3>Как считается PnL</h3></div>
-          <p>Выручка от продаж плюс оценка остатка минус полная себестоимость. Сейчас PnL рассчитан по {portfolio.summary.valuedPositionsCount} позициям с доступной котировкой; пустые цены не считаются нулём. Покупки отобраны только из 44 обычных транзакций.</p>
+          <p>Выручка от продаж плюс оценка остатка минус полная себестоимость. MCap покупки и продажи рассчитан в USD по средней цене сделки, total supply и дневному курсу ETH/USD. Пустые котировки не считаются нулём.</p>
           <div className="audit-status"><span className="status-mark">✓</span><div><strong>Продажи и связанные адреса учтены</strong><small>FRONG: 4 покупки · BOWYER: частичная продажа</small></div></div>
         </section>
 
@@ -188,6 +194,7 @@ export default function Home() {
           <span>Данные носят аналитический характер.</span>
           <a href={portfolio.sources.blockscout} target="_blank" rel="noreferrer">Blockscout</a>
           <a href={portfolio.sources.matcha} target="_blank" rel="noreferrer">Matcha</a>
+          <a href="https://www.binance.com/en/price/ethereum" target="_blank" rel="noreferrer">ETH/USD</a>
         </footer>
       </section>
     </main>
