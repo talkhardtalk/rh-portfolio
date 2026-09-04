@@ -1,8 +1,13 @@
 # RH Portfolio cloud watchdog
 
-Cloudflare Worker каждые 15 минут вызывает `workflow_dispatch` для
+Cloudflare Worker каждые 10 минут вызывает `workflow_dispatch` для
 `.github/workflows/pages.yml`. Расчёт портфеля, сборка и публикация по-прежнему
 выполняются в GitHub Actions.
+
+Публичный endpoint `/refresh` используется кнопкой «Обновить данные» на сайте.
+Перед ручным и плановым запуском Worker проверяет последние GitHub Actions:
+параллельный запуск не создаётся, а между обновлениями выдерживается минимум
+пять минут.
 
 ## Первичная настройка
 

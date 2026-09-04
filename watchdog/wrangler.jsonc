@@ -3,12 +3,12 @@
   "name": "rh-portfolio-watchdog",
   "main": "worker.js",
   "compatibility_date": "2026-09-04",
-  "workers_dev": false,
+  "workers_dev": true,
   "preview_urls": false,
   "observability": {
-    "enabled": true
+    "enabled": true,
   },
   "triggers": {
-    "crons": ["7,22,37,52 * * * *"]
-  }
+    "crons": ["7-57/10 * * * *"],
+  },
 }
