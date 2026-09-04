@@ -9,6 +9,8 @@
     "dev": "vinext dev",
     "build": "vinext build",
     "update:data": "node scripts/update-portfolio.mjs",
+    "watchdog:check": "wrangler deploy --config watchdog/wrangler.jsonc --dry-run",
+    "watchdog:deploy": "wrangler deploy --config watchdog/wrangler.jsonc",
     "start": "wrangler dev --config dist/server/wrangler.json",
     "lint": "oxlint app scripts",
     "format": "oxfmt"
