@@ -3,6 +3,7 @@ import portfolioJson from '@/data/portfolio.json';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { FreshnessIndicator } from '@/app/freshness-indicator';
 
 type Position = {
   name: string;
@@ -115,7 +116,7 @@ export default function Home() {
               <p className="section-kicker">Обзор портфеля</p>
               <h2>Robinhood Chain positions</h2>
             </div>
-            <div className="freshness"><span className="live-dot" />Обновлено {updated} МСК</div>
+            <FreshnessIndicator asOf={portfolio.asOf} label={updated} />
           </div>
 
           <div className="metrics-grid">

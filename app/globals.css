@@ -127,6 +127,8 @@ a { color: inherit; text-decoration: none; }
 .intro-row h2 { font-size: clamp(1.8rem, 3vw, 2.75rem); letter-spacing: -.055em; margin: 8px 0 0; max-width: 760px; }
 .freshness { color: #9aa59d; font-size: .8rem; display: flex; gap: 9px; align-items: center; white-space: nowrap; }
 .live-dot { width: 8px; height: 8px; background: var(--primary); border-radius: 999px; box-shadow: 0 0 0 5px rgba(108,255,152,.09), 0 0 20px var(--primary); }
+.freshness-stale { color: #ffbd66; }
+.freshness-stale .live-dot { background: #ffad42; box-shadow: 0 0 0 5px rgba(255,173,66,.1), 0 0 20px rgba(255,173,66,.7); }
 .metrics-grid { position: relative; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
 .metric-card {
   min-height: 132px;
