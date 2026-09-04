@@ -39,13 +39,4 @@ export default {
   async scheduled(_controller, env, ctx) {
     ctx.waitUntil(dispatchPortfolioUpdate(env));
   },
-
-  async fetch() {
-    return Response.json({
-      service: 'RH Portfolio cloud watchdog',
-      status: 'ok',
-      schedule: 'every 15 minutes',
-      dispatches: 'talkhardtalk/rh-portfolio · pages.yml · main',
-    });
-  },
 };
