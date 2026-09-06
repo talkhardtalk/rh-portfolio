@@ -51,6 +51,8 @@ jobs:
           repo_name="${GITHUB_REPOSITORY#*/}"
           mv "dist/client/${repo_name}/_next" dist/client/_next
           rmdir "dist/client/${repo_name}"
+      - name: Publish machine-readable portfolio snapshot
+        run: cp data/portfolio.json dist/client/portfolio.json
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v4
         with:
