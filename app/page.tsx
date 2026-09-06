@@ -318,11 +318,11 @@ export default function Home() {
             <h3>Как считается PnL</h3>
           </div>
           <p>
-            Выручка от продаж плюс исполнимая оценка остатка через 0x минус
-            полная себестоимость. Текущий MCap берётся с DexScreener по наиболее
-            ликвидной паре с ETH/WETH/USDG; исторический MCap рассчитан по
-            средней цене сделки, supply и дневному ETH/USD. Пустые котировки не
-            считаются нулём.
+            Выручка от продаж плюс исполнимая оценка остатка через Uniswap
+            Trading API минус полная себестоимость. Текущий MCap берётся с
+            DexScreener по наиболее ликвидной паре с ETH/WETH/USDG; исторический
+            MCap рассчитан по средней цене сделки, supply и дневному ETH/USD.
+            Пустые котировки не считаются нулём.
           </p>
           <div className="audit-status">
             <span className="status-mark">✓</span>
@@ -344,6 +344,9 @@ export default function Home() {
           </a>
           <a href={portfolio.sources.matcha} target="_blank" rel="noreferrer">
             Matcha
+          </a>
+          <a href="https://app.uniswap.org/" target="_blank" rel="noreferrer">
+            Uniswap
           </a>
           <a
             href="https://dexscreener.com/robinhood"

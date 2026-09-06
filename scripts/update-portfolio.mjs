@@ -4,6 +4,7 @@ const DATA_PATH = new URL('../data/portfolio.json', import.meta.url);
 const CACHE_PATH = new URL('../data/portfolio-cache.json', import.meta.url);
 const DEXSCREENER = 'https://api.dexscreener.com/token-pairs/v1/robinhood';
 const ROBINHOOD_RPC = 'https://rpc.mainnet.chain.robinhood.com';
+const UNISWAP_QUOTE_API = 'https://trade-api.gateway.uniswap.org/v1/quote';
 const WETH = '0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73';
 const USDG = '0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168';
 const NATIVE_ETH = '0x0000000000000000000000000000000000000000';
@@ -313,56 +314,47 @@ async function updateSupply(position) {
     : position.totalSupply;
 }
 
-async function fetch0xQuote(position, endpoint) {
-  const apiKey = process.env.ZEROX_API_KEY;
+async function fetchUniswapQuote(position) {
+  const apiKey = process.env.UNISWAP_API_KEY;
   if (!apiKey) return null;
 
-  const query = new URLSearchParams({
-    chainId: CHAIN_ID,
-    sellToken: position.contract,
-    buyToken: WETH,
-    sellAmount: position.balanceRaw,
-    slippageBps: '100',
+  const response = await getJson(UNISWAP_QUOTE_API, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'x-api-key': apiKey,
+      'x-universal-router-version': '2.1.1',
+    },
+    body: JSON.stringify({
+      type: 'EXACT_INPUT',
+      amount: position.balanceRaw,
+      tokenInChainId: Number(CHAIN_ID),
+      tokenOutChainId: Number(CHAIN_ID),
+      tokenIn: position.contract,
+      tokenOut: WETH,
+      swapper: portfolio.wallet,
+      slippageTolerance: 1,
+      routingPreference: 'BEST_PRICE',
+    }),
   });
-  if (endpoint.endsWith('/quote')) {
-    query.set('taker', portfolio.wallet);
-    query.set('sellEntireBalance', 'true');
+
+  const outputAmount = response?.quote?.output?.amount
+    ?? response?.quote?.expectedAmountOut
+    ?? response?.quote?.orderInfo?.outputs?.[0]?.startAmount;
+  if (!outputAmount || !/^\d+$/.test(outputAmount)) {
+    throw new Error('Uniswap не вернул корректное количество выходного WETH');
   }
-  const quote = await getJson(`https://api.0x.org/swap/${endpoint}?${query}`, {
-    headers: { '0x-api-key': apiKey, '0x-version': 'v2' },
-  });
-  return quote.buyAmount ? { endpoint, buyAmount: BigInt(quote.buyAmount) } : null;
+  return {
+    routing: response.routing ?? 'BEST_PRICE',
+    buyAmount: BigInt(outputAmount),
+  };
 }
 
 async function updateExecutableQuote(position) {
-  let primary = null;
-  try {
-    primary = await fetch0xQuote(position, 'allowance-holder/price');
-  } catch (error) {
-    console.warn(`Основной маршрут ${position.symbol} недоступен: ${error.message}`);
-  }
-  const spotValueEth = position.currentPriceUsd && portfolio.ethUsd
-    ? position.balance * position.currentPriceUsd / portfolio.ethUsd
-    : null;
-  const primaryValueEth = primary ? Number(primary.buyAmount) / 1e18 : null;
-  const needsRouteCheck = primaryValueEth === null || (spotValueEth && primaryValueEth < spotValueEth * 0.8);
-  const quotes = primary ? [primary] : [];
-
-  if (needsRouteCheck) {
-    for (const endpoint of ['allowance-holder/quote', 'permit2/price']) {
-      try {
-        const alternative = await fetch0xQuote(position, endpoint);
-        if (alternative) quotes.push(alternative);
-      } catch (error) {
-        console.warn(`Альтернативный маршрут ${position.symbol} (${endpoint}) недоступен: ${error.message}`);
-      }
-    }
-  }
-
-  const best = quotes.sort((a, b) => (a.buyAmount > b.buyAmount ? -1 : a.buyAmount < b.buyAmount ? 1 : 0))[0];
-  if (!best) return false;
-  position.currentValueEth = Number(best.buyAmount) / 1e18;
-  position.quoteProvider = `0x Swap API (${best.endpoint})`;
+  const quote = await fetchUniswapQuote(position);
+  if (!quote) return false;
+  position.currentValueEth = Number(quote.buyAmount) / 1e18;
+  position.quoteProvider = `Uniswap Trading API (${quote.routing})`;
   position.quoteAsOf = new Date().toISOString();
   return true;
 }
@@ -372,7 +364,7 @@ async function updateMarketFromSmallQuote(position) {
   const divisor = 1000n;
   const smallSellAmount = BigInt(position.balanceRaw) / divisor || 1n;
   const smallPosition = { ...position, balanceRaw: smallSellAmount.toString() };
-  const quote = await fetch0xQuote(smallPosition, 'allowance-holder/price');
+  const quote = await fetchUniswapQuote(smallPosition);
   if (!quote) return false;
 
   const tokenAmount = Number(smallSellAmount) / 10 ** (position.decimals ?? 18);
@@ -381,7 +373,7 @@ async function updateMarketFromSmallQuote(position) {
   position.currentPriceUsd = valueUsd / tokenAmount;
   position.marketCapUsd = position.currentPriceUsd * position.totalSupply;
   position.mcapSupply = position.totalSupply;
-  position.marketDataProvider = '0x Swap API (малая котировка)';
+  position.marketDataProvider = 'Uniswap Trading API (малая котировка)';
   return true;
 }
 
@@ -396,6 +388,10 @@ try {
   await discoverNewPurchases();
 } catch (error) {
   console.warn(`Новые покупки не просканированы, сохранено последнее состояние: ${error.message}`);
+}
+
+if (!process.env.UNISWAP_API_KEY) {
+  console.warn('UNISWAP_API_KEY не задан: новые исполнимые котировки пропущены.');
 }
 
 for (const position of portfolio.positions) {
