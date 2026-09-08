@@ -1,6 +1,7 @@
 import {
   ArrowDownRight,
   ArrowUpRight,
+  ChartNoAxesCombined,
   ExternalLink,
   Wallet,
 } from 'lucide-react';
@@ -86,6 +87,10 @@ function matchaUrl(position: Position) {
     sellAmount,
   });
   return `https://matcha.xyz/tokens/robinhood/${position.contract}?${query}`;
+}
+
+function gmgnUrl(position: Position) {
+  return `https://gmgn.ai/robinhood/token/${position.contract}`;
 }
 
 function Metric({
@@ -243,12 +248,27 @@ export default function Home() {
                       <TableCell>
                         <div className="token-cell">
                           <a
+                            className="token-name-link"
                             href={matchaUrl(position)}
                             target="_blank"
                             rel="noreferrer"
                             title={`Открыть ${position.symbol} на Matcha`}
                           >
                             {position.symbol}
+                          </a>
+                          <a
+                            className="gmgn-chart-link"
+                            href={gmgnUrl(position)}
+                            target="_blank"
+                            rel="noreferrer"
+                            title={`Открыть график ${position.symbol} на GMGN`}
+                            aria-label={`Открыть график ${position.symbol} на GMGN`}
+                          >
+                            <ChartNoAxesCombined
+                              size={15}
+                              strokeWidth={2.1}
+                              aria-hidden="true"
+                            />
                           </a>
                         </div>
                       </TableCell>

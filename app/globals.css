@@ -177,8 +177,13 @@ td {
 }
 tbody tr { transition: background .18s ease; }
 tbody tr:hover { background: rgba(108,255,152,.035) !important; }
-.token-cell { min-width: 112px; }
-.token-cell a {
+.token-cell {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 112px;
+}
+.token-cell .token-name-link {
   display: inline-block;
   color: #f4f8f5;
   font-size: .9rem;
@@ -186,7 +191,26 @@ tbody tr:hover { background: rgba(108,255,152,.035) !important; }
   letter-spacing: .015em;
   border-bottom: 1px solid rgba(108,255,152,.35);
 }
-.token-cell a:hover { color: var(--primary); border-color: var(--primary); }
+.token-cell .token-name-link:hover { color: var(--primary); border-color: var(--primary); }
+.token-cell .gmgn-chart-link {
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  flex: 0 0 26px;
+  color: #7f8a82;
+  border: 1px solid rgba(108,255,152,.14);
+  border-radius: 7px;
+  background: rgba(108,255,152,.025);
+  transition: color .18s ease, border-color .18s ease, background .18s ease;
+}
+.token-cell .gmgn-chart-link:hover,
+.token-cell .gmgn-chart-link:focus-visible {
+  color: var(--primary);
+  border-color: rgba(108,255,152,.5);
+  background: rgba(108,255,152,.09);
+  outline: none;
+}
 .value-cell { font-weight: 780; color: #f5fff8; }
 .date-cell { color: #aeb8b1; }
 .mcap-entry { color: #d7e1da; }
