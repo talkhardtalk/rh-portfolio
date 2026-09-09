@@ -160,6 +160,27 @@ a { color: inherit; text-decoration: none; }
 .table-scroll { overflow-x: auto; }
 table { min-width: 1320px; }
 thead { background: #060806; }
+.floating-table-header {
+  display: none;
+  position: fixed;
+  top: 74px;
+  z-index: 9;
+  overflow: hidden;
+  background: rgba(6, 8, 6, .97);
+  backdrop-filter: blur(18px);
+  box-shadow: inset 0 -1px 0 var(--border), 0 9px 22px rgba(0, 0, 0, .24);
+  pointer-events: none;
+}
+.floating-table-header.is-visible { display: block; }
+.floating-portfolio-table {
+  min-width: 1320px;
+  table-layout: fixed;
+  background: rgba(6, 8, 6, .97);
+  will-change: transform;
+}
+.floating-portfolio-table th {
+  background: rgba(6, 8, 6, .97);
+}
 th {
   color: #7f8a82 !important;
   font-size: .75rem;

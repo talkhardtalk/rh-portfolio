@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/table';
 import { FreshnessIndicator } from '@/app/freshness-indicator';
 import { PortfolioRefreshButton } from '@/app/portfolio-refresh-button';
+import { StickyPortfolioHeader } from '@/app/sticky-portfolio-header';
 
 type Position = {
   name: string;
@@ -202,7 +203,7 @@ export default function Home() {
             </Badge>
           </div>
           <div className="table-scroll">
-            <Table>
+            <Table className="portfolio-table">
               <TableHeader>
                 <TableRow>
                   <TableHead>Токен</TableHead>
@@ -329,6 +330,7 @@ export default function Home() {
                 })}
               </TableBody>
             </Table>
+            <StickyPortfolioHeader />
           </div>
         </section>
 
