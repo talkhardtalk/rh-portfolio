@@ -10,6 +10,7 @@ const USDG = '0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168';
 const NATIVE_ETH = '0x0000000000000000000000000000000000000000';
 const CHAIN_ID = '4663';
 const QUOTE_CACHE_MAX_AGE_MS = 2 * 60 * 60 * 1000;
+const SALE_SCAN_BOOTSTRAP_BLOCK = 60_000_000;
 const TRANSFER_TOPIC = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef';
 
 const portfolio = JSON.parse(await fs.readFile(DATA_PATH, 'utf8'));
@@ -18,6 +19,7 @@ async function restorePortfolioCache() {
   try {
     const cache = JSON.parse(await fs.readFile(CACHE_PATH, 'utf8'));
     portfolio.lastScannedBlock = cache.lastScannedBlock ?? portfolio.lastScannedBlock;
+    portfolio.lastSaleScannedBlock = cache.lastSaleScannedBlock ?? portfolio.lastSaleScannedBlock;
     portfolio.walletNonce = cache.walletNonce ?? portfolio.walletNonce;
     portfolio.sourceTransactionCount = cache.sourceTransactionCount ?? portfolio.sourceTransactionCount;
 
@@ -25,7 +27,11 @@ async function restorePortfolioCache() {
     const discoveredFields = [
       'name', 'symbol', 'bought', 'spentEth', 'sold', 'realizedProceedsEth', 'balance', 'balanceRaw',
       'purchaseDateLabel', 'purchaseDates', 'purchaseCount', 'entryEthUsd', 'exitEthUsd', 'confidence',
-      'purchaseTxHashes', 'discoverySource',
+      'purchaseTxHashes', 'saleTxHashes', 'saleTransactions', 'discoverySource',
+    ];
+    const persistedPositionFields = [
+      'sold', 'realizedProceedsEth', 'balance', 'balanceRaw', 'exitEthUsd',
+      'saleTxHashes', 'saleTransactions',
     ];
     for (const cached of cache.positions ?? []) {
       const contract = cached.contract.toLowerCase();
@@ -33,9 +39,14 @@ async function restorePortfolioCache() {
       if (!current) {
         portfolio.positions.push(cached);
         currentByContract.set(contract, cached);
-      } else if (cached.discoverySource === 'rpc-txs') {
-        for (const field of discoveredFields) {
+      } else {
+        for (const field of persistedPositionFields) {
           if (cached[field] !== undefined) current[field] = cached[field];
+        }
+        if (cached.discoverySource === 'rpc-txs') {
+          for (const field of discoveredFields) {
+            if (cached[field] !== undefined) current[field] = cached[field];
+          }
         }
       }
     }
@@ -120,6 +131,10 @@ function decodeAbiString(value) {
 
 function tokenAmount(raw, decimals) {
   return Number(raw) / 10 ** decimals;
+}
+
+function nearlyEqual(left, right) {
+  return Math.abs(left - right) <= Math.max(1e-12, Math.abs(right) * 1e-8);
 }
 
 function purchaseDate(timestamp) {
@@ -262,6 +277,109 @@ async function discoverNewPurchases() {
   return discovered;
 }
 
+async function discoverSales() {
+  const latestBlock = Number(BigInt(await rpc('eth_blockNumber', [])));
+  const firstBlock = (portfolio.lastSaleScannedBlock ?? SALE_SCAN_BOOTSTRAP_BLOCK) + 1;
+  if (firstBlock > latestBlock) return 0;
+
+  const walletTopic = `0x${portfolio.wallet.slice(2).toLowerCase().padStart(64, '0')}`;
+  const positionsByContract = new Map(
+    portfolio.positions.map((position) => [position.contract.toLowerCase(), position]),
+  );
+  const outgoingTransfers = [];
+  for (let fromBlock = firstBlock; fromBlock <= latestBlock; fromBlock += 100000) {
+    const toBlock = Math.min(fromBlock + 99999, latestBlock);
+    const chunk = await rpc('eth_getLogs', [{
+      fromBlock: `0x${fromBlock.toString(16)}`,
+      toBlock: `0x${toBlock.toString(16)}`,
+      topics: [TRANSFER_TOPIC, walletTopic],
+    }]);
+    outgoingTransfers.push(...chunk);
+  }
+
+  const groupedByTransaction = new Map();
+
+  for (const transfer of outgoingTransfers) {
+    const contract = transfer.address?.toLowerCase();
+    if (!positionsByContract.has(contract)) continue;
+
+    const transactionHash = transfer.transactionHash;
+    const transactions = groupedByTransaction.get(transactionHash) ?? new Map();
+    const current = transactions.get(contract) ?? {
+      raw: 0n,
+      decimals: positionsByContract.get(contract).decimals ?? 18,
+    };
+    current.raw += BigInt(transfer.data ?? '0x0');
+    transactions.set(contract, current);
+    groupedByTransaction.set(transactionHash, transactions);
+  }
+
+  let discovered = 0;
+  for (const [transactionHash, transfersByContract] of groupedByTransaction) {
+    if (transfersByContract.size !== 1) {
+      console.warn(`Продажа ${transactionHash} пропущена: несколько токенов в одной транзакции.`);
+      continue;
+    }
+
+    const [[contract, transfer]] = transfersByContract;
+    const position = positionsByContract.get(contract);
+    if (position.saleTxHashes?.includes(transactionHash)) continue;
+
+    const receipt = await rpc('eth_getTransactionReceipt', [transactionHash]);
+    if (!receipt || BigInt(receipt.status ?? '0x0') !== 1n) continue;
+    const proceedsRaw = (receipt.logs ?? [])
+      .filter((log) =>
+        log.address?.toLowerCase() === WETH.toLowerCase()
+        && log.topics?.[0]?.toLowerCase() === TRANSFER_TOPIC
+        && log.topics?.[2]?.toLowerCase() === walletTopic)
+      .reduce((sum, log) => sum + BigInt(log.data ?? '0x0'), 0n);
+    const proceedsEth = Number(proceedsRaw) / 1e18;
+    if (!(proceedsEth > 0)) continue;
+
+    const block = await rpc('eth_getBlockByNumber', [receipt.blockNumber, false]);
+    const timestamp = new Date(Number(BigInt(block.timestamp)) * 1000).toISOString();
+    const sold = tokenAmount(transfer.raw, transfer.decimals);
+    const previousSold = position.sold ?? 0;
+    const previousProceeds = position.realizedProceedsEth ?? 0;
+    const legacySale = !(position.saleTransactions?.length)
+      && previousSold > 0
+      && previousProceeds > 0
+      && nearlyEqual(previousSold, sold)
+      && nearlyEqual(previousProceeds, proceedsEth);
+    const ethUsd = legacySale && position.exitEthUsd
+      ? position.exitEthUsd
+      : portfolio.ethUsd;
+    const saleTransaction = {
+      hash: transactionHash,
+      timestamp,
+      sold,
+      proceedsEth,
+      ethUsd,
+    };
+
+    position.saleTransactions = [...(position.saleTransactions ?? []), saleTransaction];
+    position.saleTxHashes = [...new Set([...(position.saleTxHashes ?? []), transactionHash])];
+
+    if (!legacySale) {
+      const nextProceeds = previousProceeds + proceedsEth;
+      position.sold = previousSold + sold;
+      position.realizedProceedsEth = nextProceeds;
+      position.exitEthUsd = nextProceeds
+        ? ((position.exitEthUsd ?? 0) * previousProceeds + ethUsd * proceedsEth) / nextProceeds
+        : null;
+      discovered += 1;
+      console.log(
+        `Новая продажа: ${position.symbol} ${sold} за ${proceedsEth} ETH (${transactionHash})`,
+      );
+    } else {
+      console.log(`Историческая продажа ${position.symbol} привязана к ${transactionHash}.`);
+    }
+  }
+
+  portfolio.lastSaleScannedBlock = latestBlock;
+  return discovered;
+}
+
 async function updateDexMarketData(position) {
   const pairs = await getJson(`${DEXSCREENER}/${position.contract}`);
   const contract = position.contract.toLowerCase();
@@ -292,10 +410,12 @@ async function updateDexMarketData(position) {
   }
 }
 
-async function updateSupply(position) {
+async function updateOnChainState(position) {
+  const walletArg = portfolio.wallet.slice(2).toLowerCase().padStart(64, '0');
   const calls = [
     { jsonrpc: '2.0', id: 1, method: 'eth_call', params: [{ to: position.contract, data: '0x18160ddd' }, 'latest'] },
     { jsonrpc: '2.0', id: 2, method: 'eth_call', params: [{ to: position.contract, data: '0x313ce567' }, 'latest'] },
+    { jsonrpc: '2.0', id: 3, method: 'eth_call', params: [{ to: position.contract, data: `0x70a08231${walletArg}` }, 'latest'] },
   ];
   const response = await getJson(ROBINHOOD_RPC, {
     method: 'POST',
@@ -304,10 +424,21 @@ async function updateSupply(position) {
   });
   const supplyHex = response.find((item) => item.id === 1)?.result;
   const decimalsHex = response.find((item) => item.id === 2)?.result;
-  if (!supplyHex || !decimalsHex) throw new Error('totalSupply/decimals не возвращены RPC');
+  const balanceHex = response.find((item) => item.id === 3)?.result;
+  if (!supplyHex || !decimalsHex || !balanceHex) {
+    throw new Error('totalSupply/decimals/balanceOf не возвращены RPC');
+  }
 
   const decimals = Number(BigInt(decimalsHex));
+  const balanceRaw = BigInt(balanceHex).toString();
+  if (position.balanceRaw !== balanceRaw) {
+    position.currentValueEth = null;
+    position.quoteProvider = null;
+    position.quoteAsOf = null;
+  }
   position.decimals = decimals;
+  position.balanceRaw = balanceRaw;
+  position.balance = tokenAmount(BigInt(balanceRaw), decimals);
   position.totalSupply = Number(BigInt(supplyHex)) / 10 ** decimals;
   position.mcapSupply = position.marketCapUsd && position.currentPriceUsd
     ? position.marketCapUsd / position.currentPriceUsd
@@ -351,6 +482,12 @@ async function fetchUniswapQuote(position) {
 }
 
 async function updateExecutableQuote(position) {
+  if (BigInt(position.balanceRaw) === 0n) {
+    position.currentValueEth = 0;
+    position.quoteProvider = 'Onchain balance';
+    position.quoteAsOf = new Date().toISOString();
+    return true;
+  }
   const quote = await fetchUniswapQuote(position);
   if (!quote) return false;
   position.currentValueEth = Number(quote.buyAmount) / 1e18;
@@ -390,6 +527,12 @@ try {
   console.warn(`Новые покупки не просканированы, сохранено последнее состояние: ${error.message}`);
 }
 
+try {
+  await discoverSales();
+} catch (error) {
+  console.warn(`Продажи не просканированы, сохранено последнее состояние: ${error.message}`);
+}
+
 if (!process.env.UNISWAP_API_KEY) {
   console.warn('UNISWAP_API_KEY не задан: новые исполнимые котировки пропущены.');
 }
@@ -403,9 +546,9 @@ for (const position of portfolio.positions) {
     console.warn(`DexScreener ${position.symbol} не обновлён: ${error.message}`);
   }
   try {
-    await updateSupply(position);
+    await updateOnChainState(position);
   } catch (error) {
-    console.warn(`Supply ${position.symbol} не обновлён: ${error.message}`);
+    console.warn(`Onchain-состояние ${position.symbol} не обновлено: ${error.message}`);
   }
   try {
     await updateExecutableQuote(position);
@@ -448,6 +591,7 @@ await fs.writeFile(DATA_PATH, `${JSON.stringify(portfolio, null, 2)}\n`);
 await fs.writeFile(CACHE_PATH, `${JSON.stringify({
   asOf: portfolio.asOf,
   lastScannedBlock: portfolio.lastScannedBlock,
+  lastSaleScannedBlock: portfolio.lastSaleScannedBlock,
   walletNonce: portfolio.walletNonce,
   sourceTransactionCount: portfolio.sourceTransactionCount,
   positions: portfolio.positions,

@@ -12,8 +12,14 @@ type Phase = 'idle' | 'requesting' | 'waiting' | 'fresh' | 'error';
 type RefreshResponse = {
   state?: 'queued' | 'running' | 'recent';
   message?: string;
-  retryAfterSeconds?: number;
 };
+
+type PortfolioSnapshot = {
+  asOf?: string;
+};
+
+const POLL_INTERVAL_MS = 12_000;
+const MAX_WAIT_MS = 5 * 60_000;
 
 const labels: Record<Phase, string> = {
   idle: 'Обновить данные',
@@ -29,17 +35,50 @@ function reloadWithFreshCache() {
   window.location.replace(url);
 }
 
-export function PortfolioRefreshButton() {
+export function PortfolioRefreshButton({ asOf }: { asOf: string }) {
   const [phase, setPhase] = useState<Phase>('idle');
   const [message, setMessage] = useState('Запустить обновление портфеля');
   const timer = useRef<number | null>(null);
+  const mounted = useRef(true);
 
   useEffect(
-    () => () => {
-      if (timer.current !== null) window.clearTimeout(timer.current);
+    () => {
+      mounted.current = true;
+      return () => {
+        mounted.current = false;
+        if (timer.current !== null) window.clearTimeout(timer.current);
+      };
     },
     [],
   );
+
+  async function waitForPublishedSnapshot() {
+    const initialTimestamp = Date.parse(asOf);
+    const deadline = Date.now() + MAX_WAIT_MS;
+
+    while (mounted.current && Date.now() < deadline) {
+      await new Promise<void>((resolve) => {
+        timer.current = window.setTimeout(resolve, POLL_INTERVAL_MS);
+      });
+      if (!mounted.current) return;
+
+      const snapshotUrl = new URL('portfolio.json', window.location.href);
+      snapshotUrl.searchParams.set('refresh', Date.now().toString());
+      const response = await fetch(snapshotUrl, { cache: 'no-store' });
+      if (!response.ok) continue;
+
+      const snapshot = (await response.json()) as PortfolioSnapshot;
+      const publishedTimestamp = Date.parse(snapshot.asOf ?? '');
+      if (Number.isFinite(publishedTimestamp) && publishedTimestamp > initialTimestamp) {
+        setPhase('fresh');
+        setMessage('Новый снимок опубликован');
+        timer.current = window.setTimeout(reloadWithFreshCache, 1000);
+        return;
+      }
+    }
+
+    throw new Error('GitHub ещё не опубликовал новый снимок');
+  }
 
   async function requestRefresh() {
     setPhase('requesting');
@@ -58,20 +97,13 @@ export function PortfolioRefreshButton() {
       if (result.state === 'recent') {
         setPhase('fresh');
         setMessage(result.message || 'Последние данные уже опубликованы');
-        timer.current = window.setTimeout(reloadWithFreshCache, 2500);
+        timer.current = window.setTimeout(reloadWithFreshCache, 1500);
         return;
       }
 
       setPhase('waiting');
       setMessage(result.message || 'GitHub обновляет данные и публикует сайт');
-      const waitSeconds = Math.min(
-        Math.max(result.retryAfterSeconds ?? 75, 45),
-        120,
-      );
-      timer.current = window.setTimeout(
-        reloadWithFreshCache,
-        waitSeconds * 1000,
-      );
+      await waitForPublishedSnapshot();
     } catch (error) {
       setPhase('error');
       setMessage(

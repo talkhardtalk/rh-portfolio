@@ -5,6 +5,7 @@ const DISPATCH_URL =
 const RUNS_URL = `${GITHUB_API}/runs?per_page=5`;
 const ALLOWED_ORIGIN = 'https://talkhardtalk.github.io';
 const COOLDOWN_MS = 5 * 60 * 1000;
+const BUTTON_COOLDOWN_MS = 60 * 1000;
 const ACTIVE_STATUSES = new Set([
   'queued',
   'in_progress',
@@ -96,11 +97,14 @@ async function requestPortfolioUpdate(env, source) {
 
   if (latest?.created_at) {
     const ageMs = Date.now() - Date.parse(latest.created_at);
-    if (Number.isFinite(ageMs) && ageMs >= 0 && ageMs < COOLDOWN_MS) {
+    const cooldownMs = source === 'button' ? BUTTON_COOLDOWN_MS : COOLDOWN_MS;
+    if (Number.isFinite(ageMs) && ageMs >= 0 && ageMs < cooldownMs) {
       return {
         state: 'recent',
-        message: 'Данные обновлялись менее пяти минут назад',
-        retryAfterSeconds: Math.ceil((COOLDOWN_MS - ageMs) / 1000),
+        message: source === 'button'
+          ? 'Данные обновлялись менее минуты назад'
+          : 'Данные обновлялись менее пяти минут назад',
+        retryAfterSeconds: Math.ceil((cooldownMs - ageMs) / 1000),
       };
     }
   }

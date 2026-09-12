@@ -153,7 +153,7 @@ export default function Home() {
             <Wallet size={15} /> {shortAddress(portfolio.wallet)}{' '}
             <ExternalLink size={13} />
           </a>
-          <PortfolioRefreshButton />
+          <PortfolioRefreshButton asOf={portfolio.asOf} />
         </div>
       </header>
 
