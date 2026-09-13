@@ -3,9 +3,12 @@ const GITHUB_API =
 const DISPATCH_URL =
   'https://api.github.com/repos/talkhardtalk/rh-portfolio/actions/workflows/pages.yml/dispatches';
 const RUNS_URL = `${GITHUB_API}/runs?per_page=5`;
+const RUN_API =
+  'https://api.github.com/repos/talkhardtalk/rh-portfolio/actions/runs';
 const ALLOWED_ORIGIN = 'https://talkhardtalk.github.io';
 const COOLDOWN_MS = 5 * 60 * 1000;
 const BUTTON_COOLDOWN_MS = 60 * 1000;
+const ACTIVE_RUN_TIMEOUT_MS = 20 * 60 * 1000;
 const ACTIVE_STATUSES = new Set([
   'queued',
   'in_progress',
@@ -84,13 +87,75 @@ async function dispatchPortfolioUpdate(env) {
   );
 }
 
+async function cancelWorkflowRun(env, runId) {
+  assertSecret(env);
+
+  const response = await fetch(`${RUN_API}/${runId}/cancel`, {
+    method: 'POST',
+    headers: githubHeaders(env),
+  });
+
+  if (response.ok || response.status === 409) {
+    console.log(
+      JSON.stringify({
+        event: 'stale_workflow_cancel_requested',
+        runId,
+        status: response.status,
+        at: new Date().toISOString(),
+      }),
+    );
+    return true;
+  }
+
+  const details = (await response.text()).slice(0, 500);
+  console.warn(
+    JSON.stringify({
+      event: 'stale_workflow_cancel_failed',
+      runId,
+      status: response.status,
+      details,
+      at: new Date().toISOString(),
+    }),
+  );
+  return false;
+}
+
 async function requestPortfolioUpdate(env, source) {
   const latest = await getLatestWorkflowRun(env);
 
   if (latest && ACTIVE_STATUSES.has(latest.status)) {
+    const activeAgeMs = latest.created_at
+      ? Date.now() - Date.parse(latest.created_at)
+      : Number.NaN;
+
+    if (
+      !Number.isFinite(activeAgeMs) ||
+      activeAgeMs < 0 ||
+      activeAgeMs < ACTIVE_RUN_TIMEOUT_MS
+    ) {
+      return {
+        state: 'running',
+        message: 'Обновление уже выполняется',
+        retryAfterSeconds: 75,
+      };
+    }
+
+    const cancellationAccepted = await cancelWorkflowRun(env, latest.id);
+    await dispatchPortfolioUpdate(env);
+    console.log(
+      JSON.stringify({
+        event: 'stale_portfolio_refresh_replaced',
+        source,
+        staleRunId: latest.id,
+        staleStatus: latest.status,
+        staleAgeSeconds: Math.floor(activeAgeMs / 1000),
+        cancellationAccepted,
+        at: new Date().toISOString(),
+      }),
+    );
     return {
-      state: 'running',
-      message: 'Обновление уже выполняется',
+      state: 'requeued',
+      message: 'Зависшее обновление перезапущено',
       retryAfterSeconds: 75,
     };
   }

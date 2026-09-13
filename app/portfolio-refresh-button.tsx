@@ -10,7 +10,7 @@ const REFRESH_ENDPOINT =
 type Phase = 'idle' | 'requesting' | 'waiting' | 'fresh' | 'error';
 
 type RefreshResponse = {
-  state?: 'queued' | 'running' | 'recent';
+  state?: 'queued' | 'requeued' | 'running' | 'recent';
   message?: string;
 };
 
