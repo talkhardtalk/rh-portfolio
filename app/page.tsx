@@ -41,6 +41,7 @@ type Position = {
   entryEthUsd: number;
   exitEthUsd: number | null;
   quoteProvider: string | null;
+  quoteError?: string | null;
   confidence: string;
 };
 
@@ -223,6 +224,12 @@ export default function Home() {
                   >
                     MCap продажи
                   </TableHead>
+                  <TableHead
+                    className="text-right"
+                    title="Фактически полученная выручка; 1 WETH считается равным 1 ETH"
+                  >
+                    Выручка, ETH
+                  </TableHead>
                   <TableHead className="text-right">Остаток</TableHead>
                   <TableHead className="text-right">Сейчас, ETH</TableHead>
                   <TableHead className="text-right">PnL, ETH</TableHead>
@@ -242,6 +249,17 @@ export default function Home() {
                     position.mcapSupply && avgSellEth && position.exitEthUsd
                       ? avgSellEth * position.exitEthUsd * position.mcapSupply
                       : null;
+                  const soldPct = position.bought
+                    ? (position.sold / position.bought) * 100
+                    : 0;
+                  const balancePct = position.bought
+                    ? (position.balance / position.bought) * 100
+                    : 0;
+                  const quoteUnavailableLabel = position.quoteError?.includes(
+                    'временно',
+                  )
+                    ? 'нет котировки'
+                    : 'нет маршрута';
                   const hasPnl =
                     position.pnlEth !== null && position.pnlPct !== null;
                   return (
@@ -287,15 +305,34 @@ export default function Home() {
                       </TableCell>
                       <TableCell className="text-right tabular-nums">
                         {number.format(position.sold)}
+                        <small>{number.format(soldPct)}%</small>
                       </TableCell>
                       <TableCell className="text-right tabular-nums mcap-exit">
                         {displayMcapUsd(sellMcapUsd)}
                       </TableCell>
+                      <TableCell className="text-right tabular-nums proceeds-cell">
+                        {position.sold > 0
+                          ? displayEth(position.realizedProceedsEth)
+                          : '—'}
+                      </TableCell>
                       <TableCell className="text-right tabular-nums">
                         {number.format(position.balance)}
+                        <small>{number.format(balancePct)}%</small>
                       </TableCell>
                       <TableCell className="text-right tabular-nums value-cell">
-                        {displayEth(position.currentValueEth)}
+                        {position.currentValueEth === null ? (
+                          <span
+                            className="quote-unavailable"
+                            title={
+                              position.quoteError ??
+                              'Исполнимая котировка в WETH недоступна'
+                            }
+                          >
+                            —<small>{quoteUnavailableLabel}</small>
+                          </span>
+                        ) : (
+                          displayEth(position.currentValueEth)
+                        )}
                       </TableCell>
                       <TableCell
                         className={`text-right tabular-nums ${hasPnl ? (position.pnlEth! >= 0 ? 'positive' : 'negative') : 'muted-cell'}`}
@@ -344,6 +381,8 @@ export default function Home() {
             Trading API минус полная себестоимость. Текущий MCap берётся с
             DexScreener по наиболее ликвидной паре с ETH/WETH/USDG; исторический
             MCap рассчитан по средней цене сделки, supply и дневному ETH/USD.
+            Выручка учитывает полученный WETH как ETH в соотношении 1:1, а доли
+            продажи и остатка считаются от всего подтверждённого объёма покупок.
             Пустые котировки не считаются нулём.
           </p>
           <div className="audit-status">

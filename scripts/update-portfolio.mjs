@@ -137,6 +137,13 @@ function nearlyEqual(left, right) {
   return Math.abs(left - right) <= Math.max(1e-12, Math.abs(right) * 1e-8);
 }
 
+function executableQuoteError(error) {
+  if ([400, 404, 422].includes(error?.status)) {
+    return 'Uniswap не нашёл исполнимый маршрут продажи позиции в WETH';
+  }
+  return 'Исполнимая котировка временно недоступна';
+}
+
 function purchaseDate(timestamp) {
   return new Intl.DateTimeFormat('ru-RU', {
     day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Moscow',
@@ -493,6 +500,7 @@ async function updateExecutableQuote(position) {
   position.currentValueEth = Number(quote.buyAmount) / 1e18;
   position.quoteProvider = `Uniswap Trading API (${quote.routing})`;
   position.quoteAsOf = new Date().toISOString();
+  position.quoteError = null;
   return true;
 }
 
@@ -540,6 +548,7 @@ if (!process.env.UNISWAP_API_KEY) {
 for (const position of portfolio.positions) {
   position.marketCapUsd = null;
   position.currentPriceUsd = null;
+  position.quoteError = null;
   try {
     await updateDexMarketData(position);
   } catch (error) {
@@ -553,6 +562,9 @@ for (const position of portfolio.positions) {
   try {
     await updateExecutableQuote(position);
   } catch (error) {
+    if (typeof position.currentValueEth !== 'number') {
+      position.quoteError = executableQuoteError(error);
+    }
     console.warn(`Котировка ${position.symbol} не обновлена: ${error.message}`);
   }
   try {
