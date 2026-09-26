@@ -461,7 +461,7 @@ async function fetchUniswapQuote(position) {
     headers: {
       'content-type': 'application/json',
       'x-api-key': apiKey,
-      'x-universal-router-version': '2.1.1',
+      'x-universal-router-version': '2.1.2',
     },
     body: JSON.stringify({
       type: 'EXACT_INPUT',
