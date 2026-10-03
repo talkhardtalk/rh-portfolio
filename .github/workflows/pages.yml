@@ -36,10 +36,20 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-portfolio-
       - run: pnpm install --frozen-lockfile
+      - name: Verify quote validation
+        run: node --test scripts/uniswap-quotes.test.mjs
       - name: Update market data
         run: pnpm update:data
         env:
           UNISWAP_API_KEY: ${{ secrets.UNISWAP_API_KEY }}
+          QUOTE_DIAGNOSTICS: ${{ github.event_name == 'push' && 'true' || 'false' }}
+      - name: Upload quote diagnostics
+        if: always() && github.event_name == 'push'
+        uses: actions/upload-artifact@v4
+        with:
+          name: quote-diagnostics
+          path: data/quote-diagnostics.json
+          if-no-files-found: ignore
       - name: Save successful portfolio quotes
         uses: actions/cache/save@v4
         with:
@@ -52,7 +62,11 @@ jobs:
           mv "dist/client/${repo_name}/_next" dist/client/_next
           rmdir "dist/client/${repo_name}"
       - name: Publish machine-readable portfolio snapshot
-        run: cp data/portfolio.json dist/client/portfolio.json
+        run: |
+          cp data/portfolio.json dist/client/portfolio.json
+          if [ -f data/quote-diagnostics.json ]; then
+            cp data/quote-diagnostics.json dist/client/quote-diagnostics.json
+          fi
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v4
         with:

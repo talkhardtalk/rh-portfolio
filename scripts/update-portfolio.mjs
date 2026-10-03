@@ -1,13 +1,12 @@
 import fs from 'node:fs/promises';
+import { bestEthQuote, NATIVE_ETH, parseUniswapQuote, quoteAnomaly, QUOTE_VALIDATION_VERSION, WETH } from './uniswap-quotes.mjs';
 
 const DATA_PATH = new URL('../data/portfolio.json', import.meta.url);
 const CACHE_PATH = new URL('../data/portfolio-cache.json', import.meta.url);
 const DEXSCREENER = 'https://api.dexscreener.com/token-pairs/v1/robinhood';
 const ROBINHOOD_RPC = 'https://rpc.mainnet.chain.robinhood.com';
 const UNISWAP_QUOTE_API = 'https://trade-api.gateway.uniswap.org/v1/quote';
-const WETH = '0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73';
 const USDG = '0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168';
-const NATIVE_ETH = '0x0000000000000000000000000000000000000000';
 const CHAIN_ID = '4663';
 const QUOTE_CACHE_MAX_AGE_MS = 2 * 60 * 60 * 1000;
 const SALE_SCAN_BOOTSTRAP_BLOCK = 60_000_000;
@@ -55,10 +54,12 @@ async function restorePortfolioCache() {
     for (const position of portfolio.positions) {
       const cached = cachedByContract.get(position.contract.toLowerCase());
       const quoteAge = cached?.quoteAsOf ? Date.now() - Date.parse(cached.quoteAsOf) : Infinity;
-      if (cached && quoteAge <= QUOTE_CACHE_MAX_AGE_MS) {
+      if (cached && cached.quoteValidationVersion === QUOTE_VALIDATION_VERSION && quoteAge <= QUOTE_CACHE_MAX_AGE_MS) {
         position.currentValueEth = cached.currentValueEth;
         position.quoteProvider = cached.quoteProvider;
         position.quoteAsOf = cached.quoteAsOf;
+        position.quoteValidationVersion = cached.quoteValidationVersion;
+        position.quoteTokenOut = cached.quoteTokenOut;
       } else {
         position.currentValueEth = null;
         position.quoteProvider = null;
@@ -81,6 +82,7 @@ async function getJson(url, options = {}) {
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
       const response = await fetch(url, {
+        signal: AbortSignal.timeout(30_000),
         ...options,
         headers: {
           accept: 'application/json',
@@ -139,7 +141,7 @@ function nearlyEqual(left, right) {
 
 function executableQuoteError(error) {
   if ([400, 404, 422].includes(error?.status)) {
-    return 'Uniswap не нашёл исполнимый маршрут продажи позиции в WETH';
+    return 'Uniswap не нашёл исполнимый маршрут продажи позиции в ETH или WETH';
   }
   return 'Исполнимая котировка временно недоступна';
 }
@@ -452,7 +454,7 @@ async function updateOnChainState(position) {
     : position.totalSupply;
 }
 
-async function fetchUniswapQuote(position) {
+async function fetchUniswapQuote(position, tokenOut = WETH, routerVersion = '2.1.2') {
   const apiKey = process.env.UNISWAP_API_KEY;
   if (!apiKey) return null;
 
@@ -461,7 +463,7 @@ async function fetchUniswapQuote(position) {
     headers: {
       'content-type': 'application/json',
       'x-api-key': apiKey,
-      'x-universal-router-version': '2.1.2',
+      'x-universal-router-version': routerVersion,
     },
     body: JSON.stringify({
       type: 'EXACT_INPUT',
@@ -469,23 +471,44 @@ async function fetchUniswapQuote(position) {
       tokenInChainId: Number(CHAIN_ID),
       tokenOutChainId: Number(CHAIN_ID),
       tokenIn: position.contract,
-      tokenOut: WETH,
+      tokenOut,
       swapper: portfolio.wallet,
       slippageTolerance: 1,
       routingPreference: 'BEST_PRICE',
     }),
   });
 
-  const outputAmount = response?.quote?.output?.amount
-    ?? response?.quote?.expectedAmountOut
-    ?? response?.quote?.orderInfo?.outputs?.[0]?.startAmount;
-  if (!outputAmount || !/^\d+$/.test(outputAmount)) {
-    throw new Error('Uniswap не вернул корректное количество выходного WETH');
+  try {
+    return parseUniswapQuote(response, position, tokenOut);
+  } catch (error) {
+    error.diagnostic = {
+      routing: response.routing, input: response.quote?.input, output: response.quote?.output,
+      route: response.quote?.route ?? null,
+    };
+    throw error;
   }
-  return {
-    routing: response.routing ?? 'BEST_PRICE',
-    buyAmount: BigInt(outputAmount),
+}
+
+async function diagnoseFrong(position) {
+  if (process.env.QUOTE_DIAGNOSTICS !== 'true' || position.symbol !== 'FRONG' || !process.env.UNISWAP_API_KEY) return;
+  const quotes = [];
+  for (const version of ['2.1.1', '2.1.2']) {
+    for (const tokenOut of [WETH, NATIVE_ETH]) {
+      try {
+        const quote = await fetchUniswapQuote(position, tokenOut, version);
+        quotes.push({ version, tokenOut, valueEth: Number(quote.buyAmount) / 1e18, ...quote.diagnostic });
+      } catch (error) {
+        quotes.push({ version, tokenOut, error: error.message, response: error.diagnostic ?? null });
+      }
+    }
+  }
+  const report = {
+    asOf: new Date().toISOString(), contract: position.contract, balanceRaw: position.balanceRaw,
+    ethUsd: portfolio.ethUsd, spotUsd: position.balance * position.currentPriceUsd,
+    liquidityUsd: position.liquidityUsd, marketPairUrl: position.marketPairUrl, quotes,
   };
+  await fs.writeFile(new URL('../data/quote-diagnostics.json', import.meta.url), `${JSON.stringify(report, null, 2)}\n`);
+  console.log(`FRONG diagnostic: ${JSON.stringify(quotes.map(({ version, tokenOut, valueEth, error }) => ({ version, tokenOut, valueEth, error })))}`);
 }
 
 async function updateExecutableQuote(position) {
@@ -493,12 +516,31 @@ async function updateExecutableQuote(position) {
     position.currentValueEth = 0;
     position.quoteProvider = 'Onchain balance';
     position.quoteAsOf = new Date().toISOString();
+    position.quoteValidationVersion = QUOTE_VALIDATION_VERSION;
     return true;
   }
-  const quote = await fetchUniswapQuote(position);
+  const quote = await bestEthQuote(position, async (item, tokenOut) => {
+    const candidate = await fetchUniswapQuote(item, tokenOut);
+    if (!candidate) return null;
+    const anomaly = quoteAnomaly(item, Number(candidate.buyAmount) / 1e18, portfolio.ethUsd);
+    if (anomaly) throw Object.assign(new Error(anomaly), { anomaly: true });
+    return candidate;
+  });
   if (!quote) return false;
-  position.currentValueEth = Number(quote.buyAmount) / 1e18;
+  const valueEth = Number(quote.buyAmount) / 1e18;
+  position.quoteCandidates = quote.candidates;
+  const anomaly = quoteAnomaly(position, valueEth, portfolio.ethUsd);
+  if (anomaly) {
+    position.currentValueEth = null;
+    position.quoteProvider = null;
+    position.quoteAsOf = null;
+    position.quoteError = anomaly;
+    return false;
+  }
+  position.currentValueEth = valueEth;
   position.quoteProvider = `Uniswap Trading API (${quote.routing})`;
+  position.quoteTokenOut = quote.tokenOut;
+  position.quoteValidationVersion = QUOTE_VALIDATION_VERSION;
   position.quoteAsOf = new Date().toISOString();
   position.quoteError = null;
   return true;
@@ -509,7 +551,8 @@ async function updateMarketFromSmallQuote(position) {
   const divisor = 1000n;
   const smallSellAmount = BigInt(position.balanceRaw) / divisor || 1n;
   const smallPosition = { ...position, balanceRaw: smallSellAmount.toString() };
-  const quote = await fetchUniswapQuote(smallPosition);
+  if (BigInt(position.balanceRaw) === 0n) return false;
+  const quote = await bestEthQuote(smallPosition, fetchUniswapQuote);
   if (!quote) return false;
 
   const tokenAmount = Number(smallSellAmount) / 10 ** (position.decimals ?? 18);
@@ -559,11 +602,23 @@ for (const position of portfolio.positions) {
   } catch (error) {
     console.warn(`Onchain-состояние ${position.symbol} не обновлено: ${error.message}`);
   }
+  // Recheck validated cached values against the newly fetched market and balance.
+  if (typeof position.currentValueEth === 'number' && quoteAnomaly(position, position.currentValueEth, portfolio.ethUsd)) {
+    position.currentValueEth = null;
+    position.quoteProvider = null;
+    position.quoteAsOf = null;
+  }
+  await diagnoseFrong(position);
   try {
     await updateExecutableQuote(position);
   } catch (error) {
+    if (error.anomaly) {
+      position.currentValueEth = null;
+      position.quoteProvider = null;
+      position.quoteAsOf = null;
+    }
     if (typeof position.currentValueEth !== 'number') {
-      position.quoteError = executableQuoteError(error);
+      position.quoteError = error.anomaly ? error.message : executableQuoteError(error);
     }
     console.warn(`Котировка ${position.symbol} не обновлена: ${error.message}`);
   }

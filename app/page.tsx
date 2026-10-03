@@ -255,7 +255,9 @@ export default function Home() {
                   const balancePct = position.bought
                     ? (position.balance / position.bought) * 100
                     : 0;
-                  const quoteUnavailableLabel = position.quoteError?.includes(
+                  const quoteUnavailableLabel = position.quoteError?.includes('Аномальная')
+                    ? 'аномальная котировка'
+                    : position.quoteError?.includes(
                     'временно',
                   )
                     ? 'нет котировки'
@@ -325,7 +327,7 @@ export default function Home() {
                             className="quote-unavailable"
                             title={
                               position.quoteError ??
-                              'Исполнимая котировка в WETH недоступна'
+                              'Исполнимая котировка в ETH/WETH недоступна'
                             }
                           >
                             —<small>{quoteUnavailableLabel}</small>
@@ -383,7 +385,9 @@ export default function Home() {
             MCap рассчитан по средней цене сделки, supply и дневному ETH/USD.
             Выручка учитывает полученный WETH как ETH в соотношении 1:1, а доли
             продажи и остатка считаются от всего подтверждённого объёма покупок.
-            Пустые котировки не считаются нулём.
+            Для оценки сравниваются котировки продажи всего остатка в ETH и
+            WETH (1:1). Подозрительные котировки требуют проверки и не входят
+            в PnL. Пустые котировки не считаются нулём.
           </p>
           <div className="audit-status">
             <span className="status-mark">✓</span>
