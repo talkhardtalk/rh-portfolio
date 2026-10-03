@@ -4,6 +4,11 @@ on:
   push:
     branches: [master, main]
   workflow_dispatch:
+    inputs:
+      diagnose_quotes:
+        description: 'Compare FRONG router versions and ETH/WETH routes'
+        type: boolean
+        default: false
   schedule:
     - cron: '4 * * * *'
 
@@ -42,9 +47,9 @@ jobs:
         run: pnpm update:data
         env:
           UNISWAP_API_KEY: ${{ secrets.UNISWAP_API_KEY }}
-          QUOTE_DIAGNOSTICS: ${{ github.event_name == 'push' && 'true' || 'false' }}
+          QUOTE_DIAGNOSTICS: ${{ inputs.diagnose_quotes && 'true' || 'false' }}
       - name: Upload quote diagnostics
-        if: always() && github.event_name == 'push'
+        if: always() && inputs.diagnose_quotes
         uses: actions/upload-artifact@v4
         with:
           name: quote-diagnostics
