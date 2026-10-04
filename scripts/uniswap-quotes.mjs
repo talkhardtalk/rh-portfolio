@@ -5,6 +5,19 @@ export const QUOTE_VALIDATION_VERSION = 1;
 const sameToken = (left, right) => left?.toLowerCase() === right?.toLowerCase();
 const rawAmount = (value) => typeof value === 'string' && /^\d+$/.test(value);
 
+export function publicQuoteDiagnostic(response) {
+  const quote = response?.quote;
+  return {
+    routing: response?.routing ?? null,
+    input: quote?.input ?? null,
+    output: quote?.output ?? null,
+    portionAmount: quote?.portionAmount ?? '0',
+    route: quote?.route ?? null,
+    priceImpact: quote?.priceImpact ?? null,
+    txFailureReasons: quote?.txFailureReasons ?? response?.txFailureReasons ?? null,
+  };
+}
+
 export function parseUniswapQuote(response, position, tokenOut) {
   const quote = response?.quote;
   const input = quote?.input;
@@ -25,15 +38,7 @@ export function parseUniswapQuote(response, position, tokenOut) {
     tokenOut,
     buyAmount,
     // Only public quote fields; never API headers, permit payloads or signatures.
-    diagnostic: {
-      routing: response.routing,
-      input,
-      output,
-      portionAmount: fee,
-      route: quote.route ?? null,
-      priceImpact: quote.priceImpact ?? null,
-      txFailureReasons: quote.txFailureReasons ?? response.txFailureReasons ?? null,
-    },
+    diagnostic: publicQuoteDiagnostic(response),
   };
 }
 
@@ -54,12 +59,17 @@ export async function bestEthQuote(position, fetchQuote) {
   const results = await Promise.allSettled([WETH, NATIVE_ETH].map((token) => fetchQuote(position, token)));
   const candidates = results.flatMap((result, index) => result.status === 'fulfilled' && result.value
     ? [{ tokenOut: [WETH, NATIVE_ETH][index], valueEth: Number(result.value.buyAmount) / 1e18, routing: result.value.routing }]
-    : [{ tokenOut: [WETH, NATIVE_ETH][index], error: result.status === 'rejected' ? result.reason.message : 'API key unavailable' }]);
+    : [{
+      tokenOut: [WETH, NATIVE_ETH][index],
+      error: result.status === 'rejected' ? result.reason.message : 'API key unavailable',
+      ...(result.status === 'rejected' && result.reason.anomaly
+        ? { anomaly: true, valueEth: result.reason.valueEth, routing: result.reason.diagnostic?.routing } : {}),
+    }]);
   const quotes = results.filter((result) => result.status === 'fulfilled' && result.value).map((result) => result.value);
   if (!quotes.length) {
     const failure = results.find((result) => result.status === 'rejected'
       && ![400, 404, 422].includes(result.reason.status)) ?? results.find((result) => result.status === 'rejected');
-    if (failure) throw failure.reason;
+    if (failure) throw Object.assign(failure.reason, { candidates });
     return null;
   }
   const quote = quotes.reduce((best, candidate) => candidate.buyAmount > best.buyAmount ? candidate : best);

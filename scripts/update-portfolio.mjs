@@ -1,5 +1,5 @@
 import fs from 'node:fs/promises';
-import { bestEthQuote, NATIVE_ETH, parseUniswapQuote, quoteAnomaly, QUOTE_VALIDATION_VERSION, WETH } from './uniswap-quotes.mjs';
+import { bestEthQuote, NATIVE_ETH, parseUniswapQuote, publicQuoteDiagnostic, quoteAnomaly, QUOTE_VALIDATION_VERSION, WETH } from './uniswap-quotes.mjs';
 
 const DATA_PATH = new URL('../data/portfolio.json', import.meta.url);
 const CACHE_PATH = new URL('../data/portfolio-cache.json', import.meta.url);
@@ -13,6 +13,28 @@ const SALE_SCAN_BOOTSTRAP_BLOCK = 60_000_000;
 const TRANSFER_TOPIC = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef';
 
 const portfolio = JSON.parse(await fs.readFile(DATA_PATH, 'utf8'));
+const anomalyReport = { asOf: new Date().toISOString(), records: [] };
+let anomalyReportWrite = Promise.resolve();
+
+async function recordRejectedQuote(position, tokenOut, routerVersion, diagnostic, reason, valueEth = null) {
+  anomalyReport.records.push({
+    asOf: new Date().toISOString(), symbol: position.symbol, contract: position.contract,
+    balanceRaw: position.balanceRaw, balance: position.balance, tokenOut, routerVersion,
+    reason, valueEth, ethUsd: portfolio.ethUsd,
+    spotUsd: position.balance * position.currentPriceUsd,
+    liquidityUsd: position.liquidityUsd, marketPairUrl: position.marketPairUrl,
+    quote: diagnostic,
+  });
+  const reportJson = `${JSON.stringify(anomalyReport, null, 2)}\n`;
+  anomalyReportWrite = anomalyReportWrite.catch(() => {}).then(() =>
+    fs.writeFile(new URL('../data/quote-anomalies.json', import.meta.url), reportJson));
+  try {
+    await anomalyReportWrite;
+  } catch (error) {
+    console.warn(`Не удалось сохранить диагностику ${position.symbol}: ${error.message}`);
+  }
+  console.warn(`Отклонённая котировка ${position.symbol}: ${JSON.stringify({ tokenOut, routerVersion, valueEth, reason })}`);
+}
 
 async function restorePortfolioCache() {
   try {
@@ -481,10 +503,8 @@ async function fetchUniswapQuote(position, tokenOut = WETH, routerVersion = '2.1
   try {
     return parseUniswapQuote(response, position, tokenOut);
   } catch (error) {
-    error.diagnostic = {
-      routing: response.routing, input: response.quote?.input, output: response.quote?.output,
-      route: response.quote?.route ?? null,
-    };
+    error.diagnostic = publicQuoteDiagnostic(response);
+    await recordRejectedQuote(position, tokenOut, routerVersion, error.diagnostic, error.message);
     throw error;
   }
 }
@@ -522,8 +542,12 @@ async function updateExecutableQuote(position) {
   const quote = await bestEthQuote(position, async (item, tokenOut) => {
     const candidate = await fetchUniswapQuote(item, tokenOut);
     if (!candidate) return null;
-    const anomaly = quoteAnomaly(item, Number(candidate.buyAmount) / 1e18, portfolio.ethUsd);
-    if (anomaly) throw Object.assign(new Error(anomaly), { anomaly: true });
+    const valueEth = Number(candidate.buyAmount) / 1e18;
+    const anomaly = quoteAnomaly(item, valueEth, portfolio.ethUsd);
+    if (anomaly) {
+      await recordRejectedQuote(item, tokenOut, '2.1.2', candidate.diagnostic, anomaly, valueEth);
+      throw Object.assign(new Error(anomaly), { anomaly: true, valueEth, diagnostic: candidate.diagnostic });
+    }
     return candidate;
   });
   if (!quote) return false;
@@ -592,6 +616,7 @@ for (const position of portfolio.positions) {
   position.marketCapUsd = null;
   position.currentPriceUsd = null;
   position.quoteError = null;
+  delete position.quoteCandidates;
   try {
     await updateDexMarketData(position);
   } catch (error) {
@@ -612,6 +637,7 @@ for (const position of portfolio.positions) {
   try {
     await updateExecutableQuote(position);
   } catch (error) {
+    if (error.candidates) position.quoteCandidates = error.candidates;
     if (error.anomaly) {
       position.currentValueEth = null;
       position.quoteProvider = null;

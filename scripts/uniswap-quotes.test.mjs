@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { bestEthQuote, NATIVE_ETH, parseUniswapQuote, quoteAnomaly, WETH } from './uniswap-quotes.mjs';
+import { bestEthQuote, NATIVE_ETH, parseUniswapQuote, publicQuoteDiagnostic, quoteAnomaly, WETH } from './uniswap-quotes.mjs';
 
 const position = {
   contract: '0x6245e67affa44a23077f0ea7f981a8dc743a0c47',
@@ -60,4 +60,31 @@ test('FRONG anomalous quote is flagged, credible loss/profit remain accepted', (
   // Large positions or indirect, untrusted market prices are not proof of an anomaly.
   assert.equal(quoteAnomaly({ ...position, liquidityUsd: 10000 }, 0.001, 2679.22), null);
   assert.equal(quoteAnomaly({ ...position, marketDataProvider: 'DexScreener (самая ликвидная пара)' }, 0.001, 2679.22), null);
+});
+
+test('rejected candidates retain both amounts and errors for diagnosis', async () => {
+  await assert.rejects(bestEthQuote(position, async (_, tokenOut) => {
+    throw Object.assign(new Error('Аномальная котировка'), {
+      anomaly: true, valueEth: tokenOut === WETH ? 0.004 : 0.003,
+      diagnostic: { routing: 'CLASSIC' },
+    });
+  }), (error) => {
+    assert.equal(error.candidates.length, 2);
+    assert.deepEqual(error.candidates.map((candidate) => candidate.valueEth), [0.004, 0.003]);
+    assert.ok(error.candidates.every((candidate) => candidate.anomaly && candidate.error));
+    return true;
+  });
+});
+
+test('public diagnostic excludes credentials, permit payloads and signatures', () => {
+  const original = response();
+  original.headers = { 'x-api-key': 'DO_NOT_PUBLISH' };
+  original.permitData = { signature: 'DO_NOT_PUBLISH' };
+  original.quote.signature = 'DO_NOT_PUBLISH';
+  original.quote.route = [[{ type: 'v4-pool', poolId: 'public-pool' }]];
+  const diagnostic = publicQuoteDiagnostic(original);
+  assert.equal(diagnostic.route[0][0].poolId, 'public-pool');
+  assert.equal(diagnostic.input.amount, position.balanceRaw);
+  assert.ok(!JSON.stringify(diagnostic).includes('DO_NOT_PUBLISH'));
+  assert.equal(publicQuoteDiagnostic(null).input, null);
 });

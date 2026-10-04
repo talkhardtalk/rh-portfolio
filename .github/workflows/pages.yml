@@ -49,12 +49,15 @@ jobs:
           UNISWAP_API_KEY: ${{ secrets.UNISWAP_API_KEY }}
           QUOTE_DIAGNOSTICS: ${{ inputs.diagnose_quotes && 'true' || 'false' }}
       - name: Upload quote diagnostics
-        if: always() && inputs.diagnose_quotes
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: quote-diagnostics
-          path: data/quote-diagnostics.json
+          path: |
+            data/quote-diagnostics.json
+            data/quote-anomalies.json
           if-no-files-found: ignore
+          retention-days: 7
       - name: Save successful portfolio quotes
         uses: actions/cache/save@v4
         with:
@@ -71,6 +74,9 @@ jobs:
           cp data/portfolio.json dist/client/portfolio.json
           if [ -f data/quote-diagnostics.json ]; then
             cp data/quote-diagnostics.json dist/client/quote-diagnostics.json
+          fi
+          if [ -f data/quote-anomalies.json ]; then
+            cp data/quote-anomalies.json dist/client/quote-anomalies.json
           fi
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v4
