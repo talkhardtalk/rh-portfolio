@@ -1,4 +1,5 @@
 import fs from 'node:fs/promises';
+import { getLogsInRange } from './rpc-logs.mjs';
 import { bestEthQuote, NATIVE_ETH, parseUniswapQuote, publicQuoteDiagnostic, quoteAnomaly, QUOTE_VALIDATION_VERSION, WETH } from './uniswap-quotes.mjs';
 
 const DATA_PATH = new URL('../data/portfolio.json', import.meta.url);
@@ -218,16 +219,7 @@ async function discoverNewPurchases() {
   if (firstBlock > latestBlock) return 0;
 
   const walletTopic = `0x${portfolio.wallet.slice(2).toLowerCase().padStart(64, '0')}`;
-  const logs = [];
-  for (let fromBlock = firstBlock; fromBlock <= latestBlock; fromBlock += 100000) {
-    const toBlock = Math.min(fromBlock + 99999, latestBlock);
-    const chunk = await rpc('eth_getLogs', [{
-      fromBlock: `0x${fromBlock.toString(16)}`,
-      toBlock: `0x${toBlock.toString(16)}`,
-      topics: [TRANSFER_TOPIC, null, walletTopic],
-    }]);
-    logs.push(...chunk);
-  }
+  const logs = await getLogsInRange(rpc, { topics: [TRANSFER_TOPIC, null, walletTopic] }, firstBlock, latestBlock);
 
   const logsByTransaction = new Map();
   for (const log of logs) {
@@ -317,16 +309,7 @@ async function discoverSales() {
   const positionsByContract = new Map(
     portfolio.positions.map((position) => [position.contract.toLowerCase(), position]),
   );
-  const outgoingTransfers = [];
-  for (let fromBlock = firstBlock; fromBlock <= latestBlock; fromBlock += 100000) {
-    const toBlock = Math.min(fromBlock + 99999, latestBlock);
-    const chunk = await rpc('eth_getLogs', [{
-      fromBlock: `0x${fromBlock.toString(16)}`,
-      toBlock: `0x${toBlock.toString(16)}`,
-      topics: [TRANSFER_TOPIC, walletTopic],
-    }]);
-    outgoingTransfers.push(...chunk);
-  }
+  const outgoingTransfers = await getLogsInRange(rpc, { topics: [TRANSFER_TOPIC, walletTopic] }, firstBlock, latestBlock);
 
   const groupedByTransaction = new Map();
 
@@ -595,16 +578,21 @@ try {
   console.warn(`Цена ETH/USD не обновлена, сохранено последнее значение: ${error.message}`);
 }
 
+portfolio.sync = {};
 try {
   await updateTransactionCounter();
   await discoverNewPurchases();
+  portfolio.sync.purchases = { ok: true, throughBlock: portfolio.lastScannedBlock };
 } catch (error) {
+  portfolio.sync.purchases = { ok: false, throughBlock: portfolio.lastScannedBlock, error: error.message };
   console.warn(`Новые покупки не просканированы, сохранено последнее состояние: ${error.message}`);
 }
 
 try {
   await discoverSales();
+  portfolio.sync.sales = { ok: true, throughBlock: portfolio.lastSaleScannedBlock };
 } catch (error) {
+  portfolio.sync.sales = { ok: false, throughBlock: portfolio.lastSaleScannedBlock, error: error.message };
   console.warn(`Продажи не просканированы, сохранено последнее состояние: ${error.message}`);
 }
 
@@ -679,6 +667,16 @@ portfolio.summary = {
   realizedProceedsEth: valuedPositions.reduce((sum, item) => sum + (item.realizedProceedsEth ?? 0), 0),
 };
 portfolio.asOf = new Date().toISOString();
+if (process.env.GITHUB_RUN_ID) {
+  portfolio.publication = {
+    runId: process.env.GITHUB_RUN_ID,
+    runAttempt: process.env.GITHUB_RUN_ATTEMPT,
+    commit: process.env.GITHUB_SHA,
+  };
+}
+if (process.env.GITHUB_OUTPUT) {
+  await fs.appendFile(process.env.GITHUB_OUTPUT, `as_of=${portfolio.asOf}\n`);
+}
 
 await fs.writeFile(DATA_PATH, `${JSON.stringify(portfolio, null, 2)}\n`);
 await fs.writeFile(CACHE_PATH, `${JSON.stringify({

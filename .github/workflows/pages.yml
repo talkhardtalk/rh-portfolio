@@ -24,6 +24,8 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    outputs:
+      as_of: ${{ steps.update.outputs.as_of }}
     steps:
       - uses: actions/checkout@v6
       - uses: pnpm/action-setup@v4
@@ -42,8 +44,9 @@ jobs:
             ${{ runner.os }}-portfolio-
       - run: pnpm install --frozen-lockfile
       - name: Verify quote validation
-        run: node --test scripts/uniswap-quotes.test.mjs
+        run: node --test scripts/*.test.mjs
       - name: Update market data
+        id: update
         run: pnpm update:data
         env:
           UNISWAP_API_KEY: ${{ secrets.UNISWAP_API_KEY }}
@@ -88,8 +91,19 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
+    timeout-minutes: 8
     needs: build
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - name: Verify actual public snapshot and page
+        run: node scripts/verify-publication.mjs
+        env:
+          PORTFOLIO_URL: https://talkhardtalk.github.io/rh-portfolio/
+          EXPECTED_AS_OF: ${{ needs.build.outputs.as_of }}
+          EXPECTED_RUN_ID: ${{ github.run_id }}
