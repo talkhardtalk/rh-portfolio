@@ -20,8 +20,7 @@ test('RPC requests are paced and share a Retry-After pause', async () => {
 test('a backoff received while waiting invalidates an already reserved slot', async () => {
   let time = 1000;
   const waits = [];
-  let limiter;
-  limiter = createRequestLimiter({ intervalMs: 250, now: () => time, sleep: async (ms) => {
+  const limiter = createRequestLimiter({ intervalMs: 250, now: () => time, sleep: async (ms) => {
     waits.push(ms);
     if (waits.length === 1) limiter.backoff(1000);
     time += ms;
