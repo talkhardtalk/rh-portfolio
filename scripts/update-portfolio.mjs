@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import { getLogsInRange } from './rpc-logs.mjs';
 import { createRequestLimiter } from './request-limiter.mjs';
+import { archivedPurchaseLogs, indexedPurchaseLogs } from './indexed-purchases.mjs';
 import { bestEthQuote, NATIVE_ETH, parseUniswapQuote, publicQuoteDiagnostic, quoteAnomaly, QUOTE_VALIDATION_VERSION, WETH } from './uniswap-quotes.mjs';
 
 const DATA_PATH = new URL('../data/portfolio.json', import.meta.url);
@@ -232,7 +233,25 @@ async function discoverNewPurchases() {
   if (firstBlock > latestBlock) return 0;
 
   const walletTopic = `0x${portfolio.wallet.slice(2).toLowerCase().padStart(64, '0')}`;
-  const logs = await getLogsInRange(rpc, { topics: [TRANSFER_TOPIC, null, walletTopic] }, firstBlock, latestBlock);
+  let logs;
+  let throughBlock = latestBlock;
+  if (latestBlock - firstBlock > 300_000) {
+    try {
+      const archive = JSON.parse(await fs.readFile(new URL('../data/purchase-backfill-2026-11-09.json', import.meta.url), 'utf8'));
+      const indexed = await archivedPurchaseLogs(rpc, portfolio.wallet, firstBlock, latestBlock, archive)
+        ?? await indexedPurchaseLogs(getJson, rpc, portfolio.wallet, firstBlock, latestBlock);
+      logs = indexed.logs;
+      throughBlock = indexed.throughBlock;
+      if (throughBlock < latestBlock && latestBlock - throughBlock <= 300_000) {
+        logs.push(...await getLogsInRange(rpc, { topics: [TRANSFER_TOPIC, null, walletTopic] }, throughBlock + 1, latestBlock));
+        throughBlock = latestBlock;
+      }
+      console.log(`История покупок восстановлена через Transactions и RPC до блока ${throughBlock}`);
+    } catch (error) {
+      console.warn(`Индексатор недоступен, используем RPC-диапазоны: ${error.message}`);
+    }
+  }
+  logs ??= await getLogsInRange(rpc, { topics: [TRANSFER_TOPIC, null, walletTopic] }, firstBlock, latestBlock);
 
   const logsByTransaction = new Map();
   for (const log of logs) {
@@ -309,7 +328,7 @@ async function discoverNewPurchases() {
     console.log(`Новая покупка: ${details.symbol || contract} за ${spentEth} ETH (${transactionHash})`);
   }
 
-  portfolio.lastScannedBlock = latestBlock;
+  portfolio.lastScannedBlock = throughBlock;
   return discovered;
 }
 
@@ -322,7 +341,10 @@ async function discoverSales() {
   const positionsByContract = new Map(
     portfolio.positions.map((position) => [position.contract.toLowerCase(), position]),
   );
-  const outgoingTransfers = await getLogsInRange(rpc, { topics: [TRANSFER_TOPIC, walletTopic] }, firstBlock, latestBlock);
+  const outgoingTransfers = positionsByContract.size
+    ? await getLogsInRange(rpc, {
+      address: [...positionsByContract.keys()], topics: [TRANSFER_TOPIC, walletTopic],
+    }, firstBlock, latestBlock, { maxBlockRange: 1_000_000 }) : [];
 
   const groupedByTransaction = new Map();
 
