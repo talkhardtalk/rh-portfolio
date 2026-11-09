@@ -1,7 +1,7 @@
 // Keep unfiltered-address log requests within the public Robinhood RPC limit.
 export async function getLogsInRange(rpc, filter, firstBlock, latestBlock, {
   maxBlockRange = 30_000,
-  concurrency = 4,
+  concurrency = 2,
 } = {}) {
   if (![firstBlock, latestBlock, maxBlockRange, concurrency].every(Number.isSafeInteger)
     || firstBlock < 0 || latestBlock < 0 || maxBlockRange < 1 || concurrency < 1) {

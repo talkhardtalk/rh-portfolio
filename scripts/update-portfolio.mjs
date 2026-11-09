@@ -1,11 +1,13 @@
 import fs from 'node:fs/promises';
 import { getLogsInRange } from './rpc-logs.mjs';
+import { createRequestLimiter } from './request-limiter.mjs';
 import { bestEthQuote, NATIVE_ETH, parseUniswapQuote, publicQuoteDiagnostic, quoteAnomaly, QUOTE_VALIDATION_VERSION, WETH } from './uniswap-quotes.mjs';
 
 const DATA_PATH = new URL('../data/portfolio.json', import.meta.url);
 const CACHE_PATH = new URL('../data/portfolio-cache.json', import.meta.url);
 const DEXSCREENER = 'https://api.dexscreener.com/token-pairs/v1/robinhood';
 const ROBINHOOD_RPC = 'https://rpc.mainnet.chain.robinhood.com';
+const rpcLimiter = createRequestLimiter();
 const UNISWAP_QUOTE_API = 'https://trade-api.gateway.uniswap.org/v1/quote';
 const USDG = '0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168';
 const CHAIN_ID = '4663';
@@ -102,8 +104,9 @@ await restorePortfolioCache();
 
 async function getJson(url, options = {}) {
   let lastError;
-  for (let attempt = 0; attempt < 3; attempt += 1) {
+  for (let attempt = 0; attempt < 6; attempt += 1) {
     try {
+      if (url === ROBINHOOD_RPC) await rpcLimiter.wait();
       const response = await fetch(url, {
         signal: AbortSignal.timeout(30_000),
         ...options,
@@ -116,14 +119,24 @@ async function getJson(url, options = {}) {
       if (!response.ok) {
         const error = new Error(`${response.status} ${response.statusText}: ${url}`);
         error.status = response.status;
+        if (response.status === 429) {
+          const retryAfter = response.headers.get('retry-after');
+          const retrySeconds = Number(retryAfter);
+          const retryDate = Date.parse(retryAfter ?? '');
+          error.retryAfterMs = Math.max(1000 * 2 ** attempt,
+            retryAfter && Number.isFinite(retrySeconds) ? retrySeconds * 1000
+              : Number.isFinite(retryDate) ? retryDate - Date.now() : 0);
+          if (url === ROBINHOOD_RPC) rpcLimiter.backoff(error.retryAfterMs);
+        }
         throw error;
       }
       return response.json();
     } catch (error) {
       lastError = error;
       const shouldRetry = !error.status || error.status === 429 || error.status >= 500;
-      if (!shouldRetry || attempt === 2) throw error;
-      await new Promise((resolve) => setTimeout(resolve, 500 * (attempt + 1)));
+      const lastAttempt = error.status === 429 ? 5 : 2;
+      if (!shouldRetry || attempt >= lastAttempt) throw error;
+      await new Promise((resolve) => setTimeout(resolve, error.retryAfterMs ?? 500 * (attempt + 1)));
     }
   }
   throw lastError;
