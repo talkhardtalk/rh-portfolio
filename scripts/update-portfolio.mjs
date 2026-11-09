@@ -344,7 +344,7 @@ async function discoverSales() {
   const outgoingTransfers = positionsByContract.size
     ? await getLogsInRange(rpc, {
       address: [...positionsByContract.keys()], topics: [TRANSFER_TOPIC, walletTopic],
-    }, firstBlock, latestBlock, { maxBlockRange: 1_000_000 }) : [];
+    }, firstBlock, latestBlock, { maxBlockRange: positionsByContract.size === 1 ? 1_000_000 : 100_000 }) : [];
 
   const groupedByTransaction = new Map();
 

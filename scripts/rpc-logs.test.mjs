@@ -53,3 +53,15 @@ test('network, authentication and single-block errors are not swallowed or split
   await assert.rejects(getLogsInRange(async () => null, {}, 1, 2), /non-array/);
   await assert.rejects(getLogsInRange(async () => [], {}, 1, 2, { concurrency: 0 }), /Invalid/);
 });
+
+test('address-array scans preserve the filter and use the supported 100,000-block limit', async () => {
+  const address = ['token-1', 'token-2'];
+  let requests = 0;
+  await getLogsInRange(async (_, [filter]) => {
+    requests++;
+    assert.deepEqual(filter.address, address);
+    assert.ok(BigInt(filter.toBlock) - BigInt(filter.fromBlock) + 1n <= 100000n);
+    return [];
+  }, { address, topics: ['transfer', 'wallet'] }, 1, 200001, { maxBlockRange: 100000 });
+  assert.equal(requests, 3);
+});
